@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zeus AI Gateway</title>
+  <style>
+    :root {
+      --bg-primary: #0f0f0f;
+      --bg-secondary: #1a1a1a;
+      --bg-tertiary: #252525;
+      --text-primary: #e0e0e0;
+      --text-secondary: #888;
+      --accent: #7c3aed;
+      --accent-hover: #8b5cf6;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --border: #333;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--error);
+    }
+
+    .status-dot.connected { background: var(--success); }
+
+    /* Main Layout */
+    .main-container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 280px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-section h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      letter-spacing: 1px;
+    }
+
+    .processes-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+
+    .process-card {
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .process-card:hover { border-color: var(--accent); }
+    .process-card.selected {
+      border-color: var(--accent);
+      background: rgba(124, 58, 237, 0.1);
+    }
+
+    .process-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .process-name { font-weight: 600; font-size: 13px; }
+
+    .process-health {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+    }
+
+    .process-health.healthy {
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--success);
+    }
+
+    .process-health.unhealthy {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--error);
+    }
+
+    .process-health.starting,
+    .process-health.unknown {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--warning);
+      animation: blink 1s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .process-info {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    button:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    button.primary:hover { background: var(--accent-hover); }
+
+    select {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: inherit;
+    }
+
+    /* Chat Area */
+    .chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .chat-title { font-size: 14px; font-weight: 600; }
+    .chat-actions { display: flex; gap: 8px; }
+
+    /* Messages */
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    .message {
+      margin-bottom: 20px;
+      max-width: 90%;
+    }
+
+    .message.user { margin-left: auto; }
+
+    .message-header {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .message-role {
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .message.user .message-role { color: var(--accent); }
+    .message.assistant .message-role { color: var(--success); }
+
+    .message-content {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .message.user .message-content {
+      background: var(--accent);
+      color: white;
+    }
+
+    /* Thinking Panel - Collapsible */
+    .thinking-panel {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    .thinking-panel.hidden { display: none; }
+
+    .thinking-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .thinking-header:hover { background: var(--bg-tertiary); }
+
+    .thinking-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--warning);
+    }
+
+    .thinking-dots {
+      display: flex;
+      gap: 4px;
+    }
+
+    .thinking-dots span {
+      width: 6px;
+      height: 6px;
+      background: var(--warning);
+      border-radius: 50%;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+
+    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes pulse {
+      0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+      40% { opacity: 1; transform: scale(1); }
+    }
+
+    .thinking-toggle {
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .thinking-toggle .arrow {
+      transition: transform 0.2s;
+      display: inline-block;
+    }
+
+    .thinking-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+
+    .thinking-panel.expanded .thinking-content {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .thought-item {
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .thought-subject {
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--warning);
+      margin-bottom: 4px;
+    }
+
+    .thought-description {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .thought-count {
+      background: var(--warning);
+      color: var(--bg-primary);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+
+    /* Input Area */
+    .input-area {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+
+    .input-container {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    .input-wrapper { flex: 1; }
+
+    textarea {
+      width: 100%;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 13px;
+      resize: none;
+      min-height: 44px;
+      max-height: 200px;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Stream Panel */
+    .stream-panel {
+      width: 350px;
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stream-panel.hidden { display: none; }
+
+    .stream-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .stream-header h3 { font-size: 13px; font-weight: 600; }
+
+    .stream-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      font-size: 11px;
+    }
+
+    .stream-event {
+      padding: 10px;
+      margin-bottom: 8px;
+      background: var(--bg-tertiary);
+      border-radius: 6px;
+      border-left: 3px solid var(--border);
+    }
+
+    .stream-event.thinking { border-left-color: var(--accent); }
+    .stream-event.thought { border-left-color: var(--warning); }
+    .stream-event.content_delta,
+    .stream-event.content { border-left-color: var(--success); }
+    .stream-event.streaming { border-left-color: #3b82f6; }
+    .stream-event.done { border-left-color: var(--text-secondary); }
+
+    .stream-event-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .stream-event-type {
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 10px;
+    }
+
+    .stream-event.thinking .stream-event-type { color: var(--accent); }
+    .stream-event.thought .stream-event-type { color: var(--warning); }
+    .stream-event.content_delta .stream-event-type,
+    .stream-event.content .stream-event-type { color: var(--success); }
+    .stream-event.streaming .stream-event-type { color: #3b82f6; }
+
+    .stream-event-container {
+      font-size: 9px;
+      color: var(--text-secondary);
+    }
+
+    .stream-event-data {
+      color: var(--text-primary);
+      word-break: break-word;
+      line-height: 1.4;
+    }
+
+    .stream-event-time {
+      font-size: 9px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-secondary);
+      text-align: center;
+      padding: 40px;
+    }
+
+    .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+    .empty-state h3 { font-size: 16px; margin-bottom: 8px; color: var(--text-primary); }
+    .empty-state p { font-size: 13px; max-width: 300px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-primary); }
+    ::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <span>Zeus AI Gateway</span>
+    </div>
+    <div class="connection-status">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="connectionText">Disconnected</span>
+    </div>
+  </header>
+
+  <div class="main-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <h3>Actions</h3>
+        <div class="actions">
+          <button onclick="spawnProcess('gemini')" class="primary">+ Gemini</button>
+          <button onclick="spawnProcess('claude')">+ Claude</button>
+          <button onclick="spawnProcess('copilot')">+ Copilot</button>
+          <button onclick="refreshStatus()">Refresh</button>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>Provider</h3>
+        <select id="providerSelect" onchange="updateProvider()">
+          <option value="gemini">Gemini</option>
+          <option value="claude">Claude</option>
+          <option value="copilot">Copilot</option>
+        </select>
+      </div>
+
+      <div class="processes-list" id="processesList">
+        <div class="empty-state">
+          <p>No processes running</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Chat Area -->
+    <main class="chat-area">
+      <div class="chat-header">
+        <span class="chat-title" id="chatTitle">Chat</span>
+        <div class="chat-actions">
+          <button onclick="toggleStreamPanel()" id="streamToggle">Show Stream</button>
+          <button onclick="clearChat()">Clear</button>
+        </div>
+      </div>
+
+      <div class="messages" id="messages">
+        <div class="empty-state">
+          <div class="empty-state-icon">💬</div>
+          <h3>Start a conversation</h3>
+          <p>Send a message to chat with the AI daemon.</p>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <div class="input-container">
+          <div class="input-wrapper">
+            <textarea
+              id="messageInput"
+              placeholder="Send a message..."
+              rows="1"
+              onkeydown="handleKeyDown(event)"
+              oninput="autoResize(this)"
+            ></textarea>
+          </div>
+          <button onclick="sendMessage()" class="primary">Send</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Stream Panel -->
+    <aside class="stream-panel hidden" id="streamPanel">
+      <div class="stream-header">
+        <h3>Live Stream</h3>
+        <button onclick="toggleSubscription()" id="subscribeBtn">Subscribe</button>
+      </div>
+      <div class="stream-content" id="streamContent">
+        <div class="empty-state">
+          <p>Subscribe to see live daemon activity</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    // State
+    let ws = null;
+    let clientId = null;
+    let processes = [];
+    let currentProvider = 'gemini';
+    let isSubscribed = false;
+    let thoughts = [];
+    let isThinking = false;
+    let currentResponse = '';
+
+    const WS_URL = 'ws://localhost:3001';
+
+    document.addEventListener('DOMContentLoaded', connect);
+
+    function connect() {
+      ws = new WebSocket(WS_URL);
+      ws.onopen = () => console.log('Connected');
+      ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
+      ws.onclose = () => {
+        updateConnectionStatus(false);
+        setTimeout(connect, 3000);
+      };
+    }
+
+    function handleMessage(msg) {
+      console.log('MSG:', msg.type, msg);
+
+      switch (msg.type) {
+        case 'connected':
+          clientId = msg.payload.clientId;
+          updateConnectionStatus(true);
+          updateProcesses(msg.payload.providers);
+          break;
+
+        case 'providers':
+          updateProcesses(msg.payload);
+          break;
+
+        case 'spawning':
+          showNotification(`Spawning ${msg.payload.provider}...`);
+          // Show a placeholder process immediately
+          const placeholder = {
+            id: 'spawning-' + Date.now(),
+            name: `${msg.payload.provider} (starting...)`,
+            provider: msg.payload.provider,
+            port: '...',
+            health: 'starting',
+            isPlaceholder: true
+          };
+          processes.push(placeholder);
+          renderProcesses();
+          break;
+
+        case 'spawned':
+          showNotification(`${msg.payload.name} started`);
+          // Remove placeholder and add real process
+          processes = processes.filter(p => !p.isPlaceholder || p.provider !== msg.payload.provider);
+          if (msg.payload) {
+            processes.push(msg.payload);
+          }
+          renderProcesses();
+          setTimeout(refreshStatus, 500);
+          break;
+
+        case 'subscribed':
+          isSubscribed = true;
+          document.getElementById('subscribeBtn').textContent = 'Unsubscribe';
+          addStreamEvent('subscribed', `Listening to ${msg.payload.provider || msg.payload.processId}`, null, msg.payload);
+          break;
+
+        case 'unsubscribed':
+          isSubscribed = false;
+          document.getElementById('subscribeBtn').textContent = 'Subscribe';
+          break;
+
+        case 'thinking':
+          isThinking = true;
+          thoughts = [];
+          showThinkingPanel(true);
+          break;
+
+        case 'streaming':
+          startNewResponse();
+          break;
+
+        case 'thought':
+          if (msg.payload?.text) {
+            addThought(msg.payload.text);
+          }
+          break;
+
+        case 'content_delta':
+          appendToResponse(msg.payload?.text || msg.payload?.chunk || '');
+          break;
+
+        case 'content':
+          finalizeResponse(msg.payload?.text || '');
+          break;
+
+        case 'done':
+          isThinking = false;
+          finishThinking();
+          break;
+
+        case 'error':
+          isThinking = false;
+          showThinkingPanel(false);
+          addErrorMessage(msg.payload?.message || 'Error');
+          break;
+
+        case 'stream':
+          handleStreamEvent(msg);
+          break;
+
+        case 'status':
+          updateProcesses(msg.payload.providers);
+          break;
+      }
+    }
+
+    function handleStreamEvent(msg) {
+      const event = msg.event;
+      const payload = msg.payload || {};
+      const processName = msg.processName || msg.processId;
+
+      let data = '';
+      if (event === 'thought' && payload.text) {
+        data = `${payload.text.subject}: ${payload.text.description || ''}`.slice(0, 150);
+      } else if (event === 'content_delta' || event === 'content') {
+        data = (payload.text || payload.chunk || '').slice(0, 100);
+        if (data.length === 100) data += '...';
+      } else if (event === 'thinking') {
+        data = 'Processing request...';
+      } else if (event === 'streaming') {
+        data = 'Generating response...';
+      } else if (event === 'done') {
+        data = 'Response complete';
+      } else {
+        data = JSON.stringify(payload).slice(0, 100);
+      }
+
+      addStreamEvent(event, data, processName, payload);
+    }
+
+    function updateConnectionStatus(connected) {
+      document.getElementById('statusDot').classList.toggle('connected', connected);
+      document.getElementById('connectionText').textContent = connected ? 'Connected' : 'Disconnected';
+    }
+
+    function updateProcesses(providers) {
+      processes = [];
+      for (const [provider, info] of Object.entries(providers)) {
+        if (info.processes?.length > 0) {
+          for (const p of info.processes) {
+            processes.push({ ...p, provider });
+          }
+        }
+      }
+      renderProcesses();
+    }
+
+    function renderProcesses() {
+      const list = document.getElementById('processesList');
+      let html = '';
+
+      for (const p of processes) {
+        html += `
+          <div class="process-card" onclick="selectProcess('${p.id}')">
+            <div class="process-header">
+              <span class="process-name">${p.name}</span>
+              <span class="process-health ${p.health || 'unknown'}">${p.health || 'starting'}</span>
+            </div>
+            <div class="process-info">
+              ${p.provider} • Port ${p.port}${p.model ? ` • ${p.model}` : ''}
+            </div>
+          </div>
+        `;
+      }
+
+      list.innerHTML = html || '<div class="empty-state"><p>No processes running</p></div>';
+    }
+
+    function selectProcess(id) {
+      const p = processes.find(x => x.id === id);
+      if (p) document.getElementById('chatTitle').textContent = p.name;
+    }
+
+    function spawnProcess(provider) {
+      send({ type: 'spawn', payload: { provider } });
+    }
+
+    function refreshStatus() {
+      send({ type: 'status' });
+    }
+
+    function updateProvider() {
+      currentProvider = document.getElementById('providerSelect').value;
+    }
+
+    function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      addUserMessage(text);
+      send({ type: 'chat', payload: { provider: currentProvider, text } });
+      input.value = '';
+      autoResize(input);
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    function autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+    }
+
+    function addUserMessage(text) {
+      const messages = document.getElementById('messages');
+      messages.querySelector('.empty-state')?.remove();
+
+      const div = document.createElement('div');
+      div.className = 'message user';
+      div.innerHTML = `
+        <div class="message-header">
+          <span class="message-role">You</span>
+          <span>${new Date().toLocaleTimeString()}</span>
+        </div>
+        <div class="message-content">${escapeHtml(text)}</div>
+      `;
+      messages.appendChild(div);
+      scrollToBottom();
+    }
+
+    // Thinking Panel
+    function showThinkingPanel(show) {
+      let panel = document.getElementById('thinkingPanel');
+
+      if (show && !panel) {
+        const messages = document.getElementById('messages');
+        panel = document.createElement('div');
+        panel.id = 'thinkingPanel';
+        panel.className = 'thinking-panel';
+        panel.innerHTML = `
+          <div class="thinking-header">
+            <div class="thinking-title" id="thinkingTitle">
+              <div class="thinking-dots" id="thinkingDots"><span></span><span></span><span></span></div>
+              <span id="thinkingLabel">Thinking...</span>
+              <span class="thought-count" id="thoughtCount">0</span>
+            </div>
+            <div class="thinking-toggle">
+              <span id="toggleText">Show</span>
+              <span class="arrow" id="toggleArrow">▼</span>
+            </div>
+          </div>
+          <div class="thinking-content" id="thinkingContent"></div>
+        `;
+        // Add click handler
+        panel.querySelector('.thinking-header').addEventListener('click', toggleThinkingExpand);
+        messages.appendChild(panel);
+        scrollToBottom();
+      }
+    }
+
+    function toggleThinkingExpand() {
+      const panel = document.getElementById('thinkingPanel');
+      if (!panel) return;
+
+      const isExpanded = panel.classList.toggle('expanded');
+      const toggleText = document.getElementById('toggleText');
+      const toggleArrow = document.getElementById('toggleArrow');
+
+      if (toggleText) toggleText.textContent = isExpanded ? 'Hide' : 'Show';
+      if (toggleArrow) toggleArrow.style.transform = isExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
+    }
+
+    function addThought(thought) {
+      thoughts.push(thought);
+
+      const content = document.getElementById('thinkingContent');
+      if (content) {
+        const div = document.createElement('div');
+        div.className = 'thought-item';
+        div.innerHTML = `
+          <div class="thought-subject">${escapeHtml(thought.subject || 'Thinking')}</div>
+          <div class="thought-description">${escapeHtml(thought.description || '')}</div>
+        `;
+        content.appendChild(div);
+      }
+
+      const countEl = document.getElementById('thoughtCount');
+      if (countEl) countEl.textContent = thoughts.length;
+      scrollToBottom();
+    }
+
+    function finishThinking() {
+      const panel = document.getElementById('thinkingPanel');
+      if (!panel) return;
+
+      // Remove animated dots
+      const dots = document.getElementById('thinkingDots');
+      if (dots) dots.remove();
+
+      // Update label
+      const label = document.getElementById('thinkingLabel');
+      if (label) {
+        label.textContent = 'Thought process';
+        label.style.color = 'var(--success)';
+      }
+
+      // Collapse the panel
+      panel.classList.remove('expanded');
+      const toggleText = document.getElementById('toggleText');
+      const toggleArrow = document.getElementById('toggleArrow');
+      if (toggleText) toggleText.textContent = 'Show';
+      if (toggleArrow) toggleArrow.style.transform = 'rotate(0deg)';
+    }
+
+    function startNewResponse() {
+      currentResponse = '';
+      const messages = document.getElementById('messages');
+
+      const div = document.createElement('div');
+      div.className = 'message assistant';
+      div.id = 'currentResponse';
+      div.innerHTML = `
+        <div class="message-header">
+          <span class="message-role">Assistant</span>
+          <span>${new Date().toLocaleTimeString()}</span>
+        </div>
+        <div class="message-content" id="responseContent"></div>
+      `;
+      messages.appendChild(div);
+      scrollToBottom();
+    }
+
+    function appendToResponse(text) {
+      currentResponse += text;
+      const content = document.getElementById('responseContent');
+      if (content) {
+        content.textContent = currentResponse;
+        scrollToBottom();
+      }
+    }
+
+    function finalizeResponse(text) {
+      if (text) currentResponse = text;
+      const content = document.getElementById('responseContent');
+      if (content) content.textContent = currentResponse;
+    }
+
+    function addErrorMessage(error) {
+      const messages = document.getElementById('messages');
+      const div = document.createElement('div');
+      div.className = 'message assistant';
+      div.innerHTML = `
+        <div class="message-header">
+          <span class="message-role" style="color: var(--error)">Error</span>
+        </div>
+        <div class="message-content" style="border: 1px solid var(--error)">${escapeHtml(error)}</div>
+      `;
+      messages.appendChild(div);
+      scrollToBottom();
+    }
+
+    function scrollToBottom() {
+      const messages = document.getElementById('messages');
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function clearChat() {
+      thoughts = [];
+      currentResponse = '';
+      document.getElementById('messages').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">💬</div>
+          <h3>Start a conversation</h3>
+          <p>Send a message to chat with the AI daemon.</p>
+        </div>
+      `;
+    }
+
+    function toggleStreamPanel() {
+      const panel = document.getElementById('streamPanel');
+      const btn = document.getElementById('streamToggle');
+      const isHidden = panel.classList.toggle('hidden');
+      btn.textContent = isHidden ? 'Show Stream' : 'Hide Stream';
+    }
+
+    function toggleSubscription() {
+      if (isSubscribed) {
+        send({ type: 'unsubscribe', payload: { provider: currentProvider } });
+      } else {
+        send({ type: 'subscribe', payload: { provider: currentProvider } });
+      }
+    }
+
+    function addStreamEvent(type, data, container, payload) {
+      const content = document.getElementById('streamContent');
+      content.querySelector('.empty-state')?.remove();
+
+      const div = document.createElement('div');
+      div.className = `stream-event ${type}`;
+      div.innerHTML = `
+        <div class="stream-event-header">
+          <span class="stream-event-type">${type}</span>
+          ${container ? `<span class="stream-event-container">${container}</span>` : ''}
+        </div>
+        <div class="stream-event-data">${escapeHtml(data)}</div>
+        <div class="stream-event-time">${new Date().toLocaleTimeString()}</div>
+      `;
+
+      content.insertBefore(div, content.firstChild);
+
+      // Limit events
+      while (content.children.length > 100) {
+        content.removeChild(content.lastChild);
+      }
+    }
+
+    function showNotification(msg) {
+      console.log('Notification:', msg);
+    }
+
+    function send(msg) {
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(msg));
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
