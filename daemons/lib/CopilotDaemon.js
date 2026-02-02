@@ -40,7 +40,6 @@ export class CopilotDaemon extends BaseDaemon {
     });
 
     this.copilotVersion = '';
-    this.isProcessing = false;
     this.currentProcess = null;
   }
 

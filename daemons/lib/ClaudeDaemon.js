@@ -27,19 +27,17 @@ export class ClaudeDaemon extends BaseDaemon {
       port,
       defaultModel: process.env.CLAUDE_MODEL || 'sonnet',
       availableModels: AVAILABLE_MODELS,
+      systemPrompt: options.systemPrompt || null,
+      appendSystemPrompt: options.appendSystemPrompt || null,
+      allowedTools: options.allowedTools || null,
     });
 
     this.claudeVersion = '';
-    this.isProcessing = false;
     this.currentProcess = null;
 
     // Session management - use provided session ID or generate one
     this.sessionId = options.sessionId || crypto.randomUUID();
     this.sessionInitialized = false; // Track if first message has been sent
-
-    // System prompt customization
-    this.systemPrompt = options.systemPrompt || null;
-    this.appendSystemPrompt = options.appendSystemPrompt || null;
   }
 
   // ============ AUTHENTICATION ============
@@ -126,9 +124,10 @@ export class ClaudeDaemon extends BaseDaemon {
         args.push('--dangerously-skip-permissions');
       }
 
-      // Add allowed tools if specified
-      if (options.allowedTools) {
-        args.push('--allowedTools', ...options.allowedTools);
+      // Add allowed tools if specified (from options or instance config)
+      const toolsToUse = options.allowedTools || this.allowedTools;
+      if (toolsToUse && Array.isArray(toolsToUse) && toolsToUse.length > 0) {
+        args.push('--allowedTools', ...toolsToUse);
       }
 
       // Add working directory
@@ -136,11 +135,13 @@ export class ClaudeDaemon extends BaseDaemon {
         args.push('--add-dir', options.cwd);
       }
 
-      // System prompt customization
-      if (options.systemPrompt || this.systemPrompt) {
-        args.push('--system-prompt', options.systemPrompt || this.systemPrompt);
-      } else if (options.appendSystemPrompt || this.appendSystemPrompt) {
-        args.push('--append-system-prompt', options.appendSystemPrompt || this.appendSystemPrompt);
+      // System prompt customization (from options or instance config)
+      const sysPrompt = options.systemPrompt || this.systemPrompt;
+      const appendSysPrompt = options.appendSystemPrompt || this.appendSystemPrompt;
+      if (sysPrompt) {
+        args.push('--system-prompt', sysPrompt);
+      } else if (appendSysPrompt) {
+        args.push('--append-system-prompt', appendSysPrompt);
       }
 
       if (process.env.DEBUG === 'true') {
@@ -336,32 +337,27 @@ export class ClaudeDaemon extends BaseDaemon {
     console.log(`[Config] Model changed to: ${this.currentModel}`);
   }
 
-  // ============ SESSION MANAGEMENT ============
-
-  /**
-   * Get current session ID
-   */
-  getSessionId() {
-    return this.sessionId;
-  }
+  // ============ SESSION MANAGEMENT (Override base class) ============
 
   /**
    * Set session ID (for resuming conversations)
+   * Overrides base class to reset sessionInitialized flag
    */
   setSessionId(sessionId) {
-    this.sessionId = sessionId;
-    this.sessionInitialized = false; // Reset so next message creates the session
-    console.log(`[Config] Session ID changed to: ${this.sessionId}`);
+    super.setSessionId(sessionId);
+    this.sessionInitialized = false; // Reset so next message uses --session-id
   }
 
   /**
    * Create a new session (fork from current)
+   * Overrides base class to reset sessionInitialized flag
    */
   newSession() {
-    this.sessionId = crypto.randomUUID();
-    this.sessionInitialized = false; // New session needs to be initialized
+    const newId = crypto.randomUUID();
+    this.sessionId = newId;
+    this.sessionInitialized = false; // New session needs --session-id
     console.log(`[Config] New session created: ${this.sessionId}`);
-    return this.sessionId;
+    return newId;
   }
 
   // ============ EXTRA STATUS ============
@@ -370,7 +366,7 @@ export class ClaudeDaemon extends BaseDaemon {
     return {
       claudeVersion: this.claudeVersion,
       processing: this.isProcessing,
-      sessionId: this.sessionId,
+      sessionInitialized: this.sessionInitialized,
     };
   }
 

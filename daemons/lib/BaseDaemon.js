@@ -17,8 +17,14 @@ export class BaseDaemon {
 
     this.isReady = false;
     this.isAuthenticated = false;
+    this.isProcessing = false; // Track busy/idle state
     this.currentModel = options.defaultModel || null;
     this.availableModels = options.availableModels || [];
+
+    // Orchestration configuration
+    this.systemPrompt = options.systemPrompt || null;
+    this.appendSystemPrompt = options.appendSystemPrompt || null;
+    this.allowedTools = options.allowedTools || null;
 
     this.httpServer = null;
     this.wss = null;
@@ -68,6 +74,110 @@ export class BaseDaemon {
    */
   getExtraStatus() {
     return {};
+  }
+
+  // ============ SESSION MANAGEMENT (can be overridden) ============
+
+  /**
+   * Get current session ID
+   * @returns {string} Current session ID
+   */
+  getSessionId() {
+    return this.sessionId;
+  }
+
+  /**
+   * Set session ID (for resuming conversations)
+   * @param {string} sessionId - Session ID to use
+   */
+  setSessionId(sessionId) {
+    this.sessionId = sessionId;
+    console.log(`[Config] Session ID changed to: ${this.sessionId}`);
+  }
+
+  /**
+   * Create a new session
+   * @returns {string} New session ID
+   */
+  newSession() {
+    this.sessionId = uuidv4();
+    console.log(`[Config] New session created: ${this.sessionId}`);
+    return this.sessionId;
+  }
+
+  // ============ SYSTEM PROMPT CONFIGURATION ============
+
+  /**
+   * Set system prompt (replaces existing)
+   * @param {string} prompt - System prompt text
+   */
+  setSystemPrompt(prompt) {
+    this.systemPrompt = prompt;
+    this.appendSystemPrompt = null; // Clear append when setting full prompt
+    console.log(`[Config] System prompt set (${prompt?.length || 0} chars)`);
+  }
+
+  /**
+   * Set append system prompt (adds to default)
+   * @param {string} prompt - Text to append to system prompt
+   */
+  setAppendSystemPrompt(prompt) {
+    this.appendSystemPrompt = prompt;
+    this.systemPrompt = null; // Clear full prompt when setting append
+    console.log(`[Config] Append system prompt set (${prompt?.length || 0} chars)`);
+  }
+
+  /**
+   * Get current system prompt configuration
+   * @returns {object} System prompt config
+   */
+  getSystemPromptConfig() {
+    return {
+      systemPrompt: this.systemPrompt,
+      appendSystemPrompt: this.appendSystemPrompt,
+    };
+  }
+
+  // ============ TOOLS CONFIGURATION ============
+
+  /**
+   * Set allowed tools for the agent
+   * @param {string[]} tools - Array of tool names
+   */
+  setAllowedTools(tools) {
+    this.allowedTools = tools;
+    console.log(`[Config] Allowed tools set:`, tools);
+  }
+
+  /**
+   * Get current allowed tools
+   * @returns {string[]|null} Allowed tools or null for all
+   */
+  getAllowedTools() {
+    return this.allowedTools;
+  }
+
+  // ============ AGENT STATE ============
+
+  /**
+   * Get comprehensive agent state
+   * @returns {object} Full agent state
+   */
+  getAgentState() {
+    return {
+      name: this.name,
+      sessionId: this.sessionId,
+      model: this.currentModel,
+      availableModels: this.availableModels,
+      isProcessing: this.isProcessing,
+      isReady: this.isReady,
+      isAuthenticated: this.isAuthenticated,
+      systemPrompt: this.systemPrompt,
+      appendSystemPrompt: this.appendSystemPrompt,
+      allowedTools: this.allowedTools,
+      uptime: process.uptime(),
+      ...this.getExtraStatus(),
+    };
   }
 
   // ============ COMMON IMPLEMENTATION ============
@@ -145,6 +255,76 @@ export class BaseDaemon {
             uptime: process.uptime(),
             ...this.getExtraStatus(),
           });
+          break;
+
+        // ============ SESSION MANAGEMENT ============
+        case 'new_session':
+          const newSessionId = this.newSession();
+          sendEvent('session_created', { sessionId: newSessionId });
+          break;
+
+        case 'set_session':
+          const targetSessionId = parsed.payload?.sessionId || parsed.sessionId;
+          if (!targetSessionId) {
+            sendEvent('error', { message: 'sessionId required for set_session' });
+            return;
+          }
+          this.setSessionId(targetSessionId);
+          sendEvent('session_changed', { sessionId: this.sessionId });
+          break;
+
+        case 'get_session':
+          sendEvent('session', { sessionId: this.getSessionId() });
+          break;
+
+        // ============ SYSTEM PROMPT ============
+        case 'set_system_prompt':
+          // Use ?? to allow empty strings (|| would treat '' as falsy)
+          const sysPrompt = parsed.payload?.prompt ?? parsed.prompt;
+          if (sysPrompt === undefined) {
+            sendEvent('error', { message: 'prompt required for set_system_prompt' });
+            return;
+          }
+          this.setSystemPrompt(sysPrompt);
+          sendEvent('system_prompt_changed', this.getSystemPromptConfig());
+          break;
+
+        case 'set_append_system_prompt':
+          // Use ?? to allow empty strings (|| would treat '' as falsy)
+          const appendPrompt = parsed.payload?.prompt ?? parsed.prompt;
+          if (appendPrompt === undefined) {
+            sendEvent('error', { message: 'prompt required for set_append_system_prompt' });
+            return;
+          }
+          this.setAppendSystemPrompt(appendPrompt);
+          sendEvent('system_prompt_changed', this.getSystemPromptConfig());
+          break;
+
+        case 'get_system_prompt':
+          sendEvent('system_prompt', this.getSystemPromptConfig());
+          break;
+
+        // ============ TOOLS CONFIGURATION ============
+        case 'set_allowed_tools':
+          // Check if 'tools' property exists in payload (allows null values)
+          const tools = parsed.payload && 'tools' in parsed.payload
+            ? parsed.payload.tools
+            : parsed.tools;
+          if (!Array.isArray(tools) && tools !== null) {
+            sendEvent('error', { message: 'tools must be an array or null for set_allowed_tools' });
+            return;
+          }
+          this.setAllowedTools(tools);
+          sendEvent('allowed_tools_changed', { tools: this.getAllowedTools() });
+          break;
+
+        case 'get_allowed_tools':
+          sendEvent('allowed_tools', { tools: this.getAllowedTools() });
+          break;
+
+        // ============ AGENT STATE ============
+        case 'get_agent_state':
+          sendEvent('agent_state', this.getAgentState());
           break;
 
         default:

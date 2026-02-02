@@ -25,6 +25,10 @@
     "test:gemini": "SKIP_CLAUDE=1 SKIP_COPILOT=1 node --test test/daemon.test.js test/session.test.js",
     "test:claude": "SKIP_GEMINI=1 SKIP_COPILOT=1 node --test test/daemon.test.js test/session.test.js",
     "test:copilot": "SKIP_GEMINI=1 SKIP_CLAUDE=1 node --test test/daemon.test.js test/session.test.js",
+    "test:orchestration": "node --test test/orchestration.test.js",
+    "test:orchestration:claude": "SKIP_GEMINI=1 SKIP_COPILOT=1 node --test test/orchestration.test.js",
+    "test:orchestration:gemini": "SKIP_CLAUDE=1 SKIP_COPILOT=1 node --test test/orchestration.test.js",
+    "test:orchestration:integration": "INTEGRATION=1 node --test test/orchestration.test.js",
     "test:integration": "INTEGRATION=1 node --test test/gateway.test.js",
     "test:debug": "DEBUG=true node --test test/*.test.js"
   },

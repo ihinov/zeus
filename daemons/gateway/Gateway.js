@@ -350,6 +350,46 @@ export class Gateway {
           });
           break;
 
+        // ============ ORCHESTRATION: SESSION MANAGEMENT ============
+        case 'new_session':
+          await this.handleForwardToProcess(clientId, message);
+          break;
+
+        case 'set_session':
+          await this.handleForwardToProcess(clientId, message);
+          break;
+
+        case 'get_session':
+          await this.handleForwardToProcess(clientId, message);
+          break;
+
+        // ============ ORCHESTRATION: SYSTEM PROMPT ============
+        case 'set_system_prompt':
+          await this.handleForwardToProcess(clientId, message);
+          break;
+
+        case 'set_append_system_prompt':
+          await this.handleForwardToProcess(clientId, message);
+          break;
+
+        case 'get_system_prompt':
+          await this.handleForwardToProcess(clientId, message);
+          break;
+
+        // ============ ORCHESTRATION: TOOLS ============
+        case 'set_allowed_tools':
+          await this.handleForwardToProcess(clientId, message);
+          break;
+
+        case 'get_allowed_tools':
+          await this.handleForwardToProcess(clientId, message);
+          break;
+
+        // ============ ORCHESTRATION: AGENT STATE ============
+        case 'get_agent_state':
+          await this.handleForwardToProcess(clientId, message);
+          break;
+
         default:
           this.sendToClient(clientId, {
             type: 'error',
@@ -591,6 +631,66 @@ export class Gateway {
     this.sendToClient(clientId, {
       type: 'models',
       payload: models,
+    });
+  }
+
+  // ============ ORCHESTRATION: FORWARD TO PROCESS ============
+
+  /**
+   * Forward a message to a specific process for orchestration operations.
+   * Requires processId to identify the target daemon.
+   * Optionally can use provider to auto-select a healthy process.
+   */
+  async handleForwardToProcess(clientId, message) {
+    const client = this.clients.get(clientId);
+    let processId = message.payload?.processId || message.processId;
+    const provider = message.payload?.provider || message.provider;
+
+    // If no processId but provider is given, select a process
+    if (!processId && provider) {
+      const processInfo = this.getProcessForProvider(provider);
+      if (processInfo) {
+        processId = processInfo.id;
+      }
+    }
+
+    if (!processId) {
+      this.sendToClient(clientId, {
+        type: 'error',
+        payload: {
+          message: 'processId or provider required for this operation',
+          hint: 'Use list_processes to find available processes',
+        },
+      });
+      return;
+    }
+
+    // Check if process exists and is connected
+    const processInfo = this.processManager.get(processId);
+    if (!processInfo) {
+      this.sendToClient(clientId, {
+        type: 'error',
+        payload: { message: `Process ${processId} not found` },
+      });
+      return;
+    }
+
+    const ws = this.daemonConnections.get(processId);
+    if (!ws || ws.readyState !== 1) { // 1 = WebSocket.OPEN
+      this.sendToClient(clientId, {
+        type: 'error',
+        payload: { message: `Process ${processId} not connected` },
+      });
+      return;
+    }
+
+    // Mark client as expecting response from this process
+    client.currentProcessId = processId;
+
+    // Forward the message to the daemon
+    this.sendToProcess(processId, {
+      type: message.type,
+      payload: message.payload,
     });
   }
 

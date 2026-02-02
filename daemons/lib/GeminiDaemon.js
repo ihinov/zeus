@@ -208,71 +208,80 @@ export class GeminiDaemon extends BaseDaemon {
   // ============ CHAT ============
 
   async chat(message, options, sendEvent) {
+    if (this.isProcessing) {
+      throw new Error('Already processing a message');
+    }
+
     const client = this.config.getGeminiClient();
 
     if (!client || !client.isInitialized()) {
       throw new Error('Gemini client not initialized');
     }
 
+    this.isProcessing = true;
     sendEvent('streaming', {});
 
     const abortController = new AbortController();
     const request = [{ text: message }];
     const promptId = `prompt-${Date.now()}`;
 
-    const stream = client.sendMessageStream(request, abortController.signal, promptId);
-    let fullText = '';
+    try {
+      const stream = client.sendMessageStream(request, abortController.signal, promptId);
+      let fullText = '';
 
-    for await (const event of stream) {
-      switch (event.type) {
-        case GeminiEventType.Content:
-          const chunk = event.value || '';
-          fullText += chunk;
-          sendEvent('content_delta', { text: chunk });
-          break;
+      for await (const event of stream) {
+        switch (event.type) {
+          case GeminiEventType.Content:
+            const chunk = event.value || '';
+            fullText += chunk;
+            sendEvent('content_delta', { text: chunk });
+            break;
 
-        case GeminiEventType.Thought:
-          sendEvent('thought', { text: event.value });
-          break;
+          case GeminiEventType.Thought:
+            sendEvent('thought', { text: event.value });
+            break;
 
-        case GeminiEventType.ToolCallRequest:
-          sendEvent('tool_call', {
-            id: event.value?.id,
-            name: event.value?.name,
-            args: event.value?.args,
-          });
-          break;
+          case GeminiEventType.ToolCallRequest:
+            sendEvent('tool_call', {
+              id: event.value?.id,
+              name: event.value?.name,
+              args: event.value?.args,
+            });
+            break;
 
-        case GeminiEventType.ToolCallResponse:
-          sendEvent('tool_result', {
-            id: event.value?.id,
-            name: event.value?.name,
-            result: event.value?.result,
-          });
-          break;
+          case GeminiEventType.ToolCallResponse:
+            sendEvent('tool_result', {
+              id: event.value?.id,
+              name: event.value?.name,
+              result: event.value?.result,
+            });
+            break;
 
-        case GeminiEventType.Error:
-          sendEvent('error', {
-            message: event.value?.message || String(event.value) || 'Unknown error',
-          });
-          break;
+          case GeminiEventType.Error:
+            sendEvent('error', {
+              message: event.value?.message || String(event.value) || 'Unknown error',
+            });
+            break;
 
-        case GeminiEventType.ChatCompressed:
-          sendEvent('chat_compressed', {});
-          break;
+          case GeminiEventType.ChatCompressed:
+            sendEvent('chat_compressed', {});
+            break;
 
-        case GeminiEventType.LoopDetected:
-          sendEvent('warning', { message: 'Loop detected in conversation' });
-          break;
+          case GeminiEventType.LoopDetected:
+            sendEvent('warning', { message: 'Loop detected in conversation' });
+            break;
+        }
       }
-    }
 
-    if (fullText) {
-      sendEvent('content', { text: fullText });
-    }
+      if (fullText) {
+        sendEvent('content', { text: fullText });
+      }
 
-    sendEvent('done', {});
-    return fullText;
+      sendEvent('done', {});
+      return fullText;
+    } finally {
+      this.isProcessing = false;
+    }
   }
 
   // ============ MODEL SWITCHING ============
@@ -303,5 +312,13 @@ export class GeminiDaemon extends BaseDaemon {
     await this.config.initialize();
     await this.config.refreshAuth(this.authResult.type);
     console.log(`[Config] Model switched to: ${this.currentModel}`);
+  }
+
+  // ============ EXTRA STATUS ============
+
+  getExtraStatus() {
+    return {
+      processing: this.isProcessing,
+    };
   }
 }
