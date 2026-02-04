@@ -16,7 +16,7 @@ import {
   GeminiEventType,
   DEFAULT_GEMINI_MODEL,
 } from '@google/gemini-cli-core';
-import { BaseDaemon } from './BaseDaemon.js';
+import { BaseDaemon } from '../lib/BaseDaemon.js';
 
 // Paths for credentials
 const GEMINI_DIR = path.join(os.homedir(), '.gemini');
@@ -321,4 +321,16 @@ export class GeminiDaemon extends BaseDaemon {
       processing: this.isProcessing,
     };
   }
+}
+
+// ============ ENTRY POINT ============
+
+// Run directly: node gemini/index.js [port]
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const port = parseInt(process.argv[2]) || parseInt(process.env.PORT) || 3456;
+  const daemon = new GeminiDaemon({ port });
+  daemon.start().catch((err) => {
+    console.error('Fatal error:', err.message);
+    process.exit(1);
+  });
 }

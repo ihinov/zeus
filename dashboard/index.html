@@ -1,0 +1,2544 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:3001 http://localhost:3001">
+  <title>Zeus Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #0d0d14;
+      --bg-secondary: #13131c;
+      --bg-tertiary: #1a1a26;
+      --bg-hover: #1e1e2a;
+      --border: #2a2a3a;
+      --text-primary: #f0f0f0;
+      --text-secondary: #888;
+      --text-muted: #555;
+      --accent: #00d9ff;
+      --accent-green: #00ff88;
+      --accent-red: #ff4466;
+      --accent-yellow: #ffcc00;
+    }
+
+    body {
+      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      font-weight: 400;
+      letter-spacing: 0.2px;
+    }
+
+    /* ============ TITLEBAR ============ */
+    .titlebar {
+      height: 40px;
+      background: var(--bg-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      -webkit-app-region: drag;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .titlebar-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .titlebar-title .logo {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--bg-tertiary);
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+    }
+
+    .titlebar-title span {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .window-controls {
+      display: flex;
+      gap: 8px;
+      -webkit-app-region: no-drag;
+    }
+
+    .window-btn {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .window-btn:hover {
+      opacity: 0.8;
+    }
+
+    .window-btn.close {
+      background: var(--accent-red);
+    }
+
+    .window-btn.minimize {
+      background: var(--accent-yellow);
+    }
+
+    .window-btn.maximize {
+      background: var(--accent-green);
+    }
+
+    /* ============ MAIN LAYOUT ============ */
+    .main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ============ SIDEBAR ============ */
+    .sidebar {
+      width: 280px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-nav {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 15px;
+      color: var(--text-primary);
+      transition: background 0.15s;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .nav-item .icon {
+      font-size: 14px;
+      opacity: 0.7;
+      font-family: system-ui;
+    }
+
+    /* ============ AVATAR SECTION ============ */
+    .avatar-section {
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .avatar-ring {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      padding: 4px;
+      background: conic-gradient(var(--accent) 0deg, var(--accent) 270deg, transparent 270deg);
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    .avatar-ring::before {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      right: 4px;
+      bottom: 4px;
+      background: var(--bg-secondary);
+      border-radius: 50%;
+    }
+
+    .avatar {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #1a1a2e 0%, #2a2a4a 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--accent);
+      position: relative;
+      z-index: 1;
+    }
+
+    .avatar-name {
+      font-size: 20px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .avatar-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+    }
+
+    .status-dot.thinking {
+      background: var(--accent-yellow);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .avatar-substatus {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* ============ SIDEBAR FOOTER ============ */
+    .sidebar-footer {
+      padding: 12px;
+      border-top: 1px solid var(--border);
+      margin-top: auto;
+    }
+
+    /* ============ THREADS SECTION ============ */
+    .threads-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .threads-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .threads-header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .threads-header-actions button {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 4px;
+      font-size: 14px;
+    }
+
+    .threads-header-actions button:hover {
+      color: var(--text-primary);
+    }
+
+    .threads-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 8px;
+    }
+
+    .thread-group {
+      margin-bottom: 8px;
+    }
+
+    .thread-group-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      font-size: 15px;
+      color: var(--text-primary);
+      cursor: pointer;
+      border-radius: 6px;
+    }
+
+    .thread-group-header:hover {
+      background: var(--bg-hover);
+    }
+
+    .thread-group-header .icon {
+      font-size: 14px;
+      opacity: 0.6;
+    }
+
+    .thread-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px 10px 36px;
+      font-size: 14px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-radius: 6px;
+    }
+
+    .thread-item:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .thread-item.active {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border-left: 2px solid var(--accent);
+    }
+
+    .thread-item .time {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .thread-empty {
+      padding: 4px 12px 8px 36px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ============ CONTENT AREA ============ */
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-primary);
+    }
+
+    .content-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Centering for placeholder content */
+    .content-body.centered {
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    /* Chat container should take full space */
+    .content-body > .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .content-placeholder {
+      text-align: center;
+    }
+
+    .content-placeholder .icon {
+      font-size: 48px;
+      margin-bottom: 24px;
+      width: 80px;
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-secondary);
+      border: 2px solid var(--border);
+      border-radius: 16px;
+      color: var(--accent);
+      font-weight: 700;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .content-placeholder h2 {
+      font-size: 32px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .content-placeholder .subtitle {
+      font-size: 20px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    /* ============ INPUT AREA ============ */
+    .input-area {
+      padding: 20px 40px 30px;
+    }
+
+    .input-box {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .input-field {
+      width: 100%;
+      background: none;
+      border: none;
+      outline: none;
+      color: var(--text-primary);
+      font-size: 16px;
+      resize: none;
+      font-family: inherit;
+      font-weight: 400;
+    }
+
+    .input-field::placeholder {
+      color: var(--text-muted);
+    }
+
+    .input-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .input-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .input-action-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 4px;
+    }
+
+    .input-action-btn:hover {
+      color: var(--text-primary);
+    }
+
+    .model-selector {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-secondary);
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .model-selector:hover {
+      color: var(--text-primary);
+    }
+
+    /* ============ SCROLLBAR ============ */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg-primary);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3a3a4a;
+    }
+
+    /* ============ LOADING SCREEN ============ */
+    .loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      transition: opacity 0.3s, visibility 0.3s;
+    }
+
+    .loading-screen.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .loading-logo {
+      font-size: 64px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 24px;
+      width: 100px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-secondary);
+      border: 2px solid var(--border);
+      border-radius: 20px;
+    }
+
+    .loading-title {
+      font-size: 24px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .loading-text {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+
+    .loading-spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .loading-steps {
+      margin-top: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 300px;
+    }
+
+    .loading-step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .loading-step-icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 12px;
+    }
+
+    .loading-step.pending .loading-step-icon {
+      border: 2px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .loading-step.active .loading-step-icon {
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    .loading-step.success .loading-step-icon {
+      background: var(--accent-green);
+      color: var(--bg-primary);
+    }
+
+    .loading-step.error .loading-step-icon {
+      background: var(--accent-red);
+      color: white;
+    }
+
+    .loading-step.success {
+      color: var(--text-primary);
+    }
+
+    .loading-step.error {
+      color: var(--accent-red);
+    }
+
+    .loading-error {
+      margin-top: 24px;
+      padding: 16px 24px;
+      background: rgba(255, 68, 102, 0.1);
+      border: 1px solid var(--accent-red);
+      border-radius: 8px;
+      color: var(--accent-red);
+      max-width: 400px;
+      text-align: center;
+    }
+
+    .loading-actions {
+      margin-top: 24px;
+      display: flex;
+      gap: 12px;
+    }
+
+    /* ============ SETTINGS MODAL ============ */
+    .settings-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1500;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+    }
+
+    .settings-modal.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .settings-panel {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 500px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .settings-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .settings-title {
+      font-size: 18px;
+      font-weight: 500;
+    }
+
+    .settings-close {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 20px;
+      padding: 4px;
+    }
+
+    .settings-body {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .settings-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .settings-danger {
+      color: var(--accent-red);
+    }
+
+    .avatar-section {
+      cursor: pointer;
+    }
+
+    .avatar-section:hover .avatar-ring {
+      transform: scale(1.02);
+    }
+
+    .avatar-ring {
+      transition: transform 0.15s;
+    }
+
+    /* ============ WIZARD MODAL ============ */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .wizard {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 560px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .wizard-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .wizard-title {
+      font-size: 18px;
+      font-weight: 500;
+    }
+
+    .wizard-close {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 20px;
+      padding: 4px;
+    }
+
+    .wizard-close:hover {
+      color: var(--text-primary);
+    }
+
+    .wizard-progress {
+      display: flex;
+      gap: 8px;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .wizard-step-indicator {
+      flex: 1;
+      height: 4px;
+      background: var(--bg-tertiary);
+      border-radius: 2px;
+    }
+
+    .wizard-step-indicator.completed {
+      background: var(--accent);
+    }
+
+    .wizard-step-indicator.active {
+      background: linear-gradient(90deg, var(--accent) 50%, var(--bg-tertiary) 50%);
+    }
+
+    .wizard-body {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .wizard-step {
+      display: none;
+    }
+
+    .wizard-step.active {
+      display: block;
+    }
+
+    .wizard-step-title {
+      font-size: 20px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .wizard-step-description {
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    /* Wizard Options */
+    .wizard-options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .wizard-option {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: var(--bg-tertiary);
+      border: 2px solid transparent;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .wizard-option:hover {
+      background: var(--bg-hover);
+    }
+
+    .wizard-option.selected {
+      border-color: var(--accent);
+      background: rgba(0, 217, 255, 0.05);
+    }
+
+    .wizard-option.disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .wizard-option-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: var(--bg-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .wizard-option-content {
+      flex: 1;
+    }
+
+    .wizard-option-name {
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .wizard-option-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .wizard-option-status {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    .wizard-option-status.installed {
+      background: rgba(0, 255, 136, 0.15);
+      color: var(--accent-green);
+    }
+
+    .wizard-option-status.not-installed {
+      background: rgba(255, 68, 102, 0.15);
+      color: var(--accent-red);
+    }
+
+    /* Wizard Input */
+    .wizard-input-group {
+      margin-bottom: 20px;
+    }
+
+    .wizard-label {
+      display: block;
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .wizard-input {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .wizard-input:focus {
+      border-color: var(--accent);
+    }
+
+    .wizard-textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    /* Wizard Footer */
+    .wizard-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .wizard-btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+      font-family: inherit;
+    }
+
+    .wizard-btn-secondary {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+
+    .wizard-btn-secondary:hover {
+      background: var(--bg-hover);
+    }
+
+    .wizard-btn-primary {
+      background: var(--accent);
+      border: none;
+      color: var(--bg-primary);
+    }
+
+    .wizard-btn-primary:hover {
+      opacity: 0.9;
+    }
+
+    .wizard-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .wizard-spacer {
+      flex: 1;
+    }
+
+    /* Loading spinner */
+    .wizard-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      gap: 16px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+  <link rel="stylesheet" href="components/chat.css">
+  <script src="components/chat.js"></script>
+</head>
+<body>
+  <!-- Loading Screen -->
+  <div class="loading-screen" id="loading-screen">
+    <div class="loading-logo">Z</div>
+    <div class="loading-title">Zeus</div>
+    <div class="loading-text" id="loading-text">Initializing...</div>
+    <div class="loading-spinner" id="loading-spinner"></div>
+
+    <div class="loading-steps" id="loading-steps">
+      <div class="loading-step pending" id="step-docker">
+        <div class="loading-step-icon">1</div>
+        <span>Checking Docker...</span>
+      </div>
+      <div class="loading-step pending" id="step-gateway">
+        <div class="loading-step-icon">2</div>
+        <span>Starting Gateway...</span>
+      </div>
+      <div class="loading-step pending" id="step-containers">
+        <div class="loading-step-icon">3</div>
+        <span>Checking Containers...</span>
+      </div>
+      <div class="loading-step pending" id="step-daemon">
+        <div class="loading-step-icon">4</div>
+        <span>Starting Daemon...</span>
+      </div>
+    </div>
+
+    <div class="loading-error" id="loading-error" style="display: none;"></div>
+
+    <div class="loading-actions" id="loading-actions" style="display: none;">
+      <button class="wizard-btn wizard-btn-secondary" id="btn-clear-containers">Clear All Containers</button>
+      <button class="wizard-btn wizard-btn-primary" id="btn-retry-startup">Retry</button>
+    </div>
+  </div>
+
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <div class="titlebar-title">
+      <span class="logo">Z</span>
+      <span>Zeus</span> Dashboard
+    </div>
+    <div class="window-controls">
+      <button class="window-btn minimize" id="btn-minimize"></button>
+      <button class="window-btn maximize" id="btn-maximize"></button>
+      <button class="window-btn close" id="btn-close"></button>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div class="main">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="avatar-section" id="avatar-section">
+        <div class="avatar-ring">
+          <div class="avatar" id="avatar-icon">?</div>
+        </div>
+        <div class="avatar-name" id="avatar-name">No Daemon</div>
+        <div class="avatar-status">
+          <span class="status-dot" id="status-dot"></span>
+          <span id="status-text">Not configured</span>
+        </div>
+        <div class="avatar-substatus" id="avatar-substatus"></div>
+      </div>
+
+      <div class="sidebar-nav">
+        <div class="nav-item" id="btn-new-daemon">
+          <span class="icon">+</span>
+          New Daemon
+        </div>
+      </div>
+
+      <div class="threads-section">
+        <div class="threads-header">
+          <span>Sessions</span>
+          <div class="threads-header-actions">
+            <button id="btn-new-session" title="New Session">+</button>
+          </div>
+        </div>
+        <div class="threads-list" id="sessions-list">
+          <!-- Sessions will be populated here -->
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="nav-item" id="btn-settings">
+          <span class="icon">⚙</span>
+          Settings
+        </div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+      <div class="content-body" id="content-body">
+        <!-- Content populated dynamically -->
+      </div>
+
+      <!-- Input area is now part of ChatComponent -->
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="settings-modal" id="settings-modal">
+    <div class="settings-panel">
+      <div class="settings-header">
+        <span class="settings-title">Daemon Settings</span>
+        <button class="settings-close" id="settings-close">x</button>
+      </div>
+
+      <div class="settings-body">
+        <div class="wizard-input-group">
+          <label class="wizard-label">Name</label>
+          <input type="text" class="wizard-input" id="settings-name" placeholder="Daemon name">
+        </div>
+
+        <div class="wizard-input-group">
+          <label class="wizard-label">Model</label>
+          <select class="wizard-input" id="settings-model">
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+
+        <div class="wizard-input-group">
+          <label class="wizard-label">Prompt Template</label>
+          <select class="wizard-input" id="settings-template">
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+
+        <div class="wizard-input-group">
+          <label class="wizard-label">System Prompt</label>
+          <textarea class="wizard-input wizard-textarea" id="settings-prompt" rows="8" placeholder="System prompt..."></textarea>
+        </div>
+      </div>
+
+      <div class="settings-footer">
+        <button class="wizard-btn wizard-btn-secondary settings-danger" id="settings-delete">Delete</button>
+        <div class="wizard-spacer"></div>
+        <button class="wizard-btn wizard-btn-secondary" id="settings-cancel">Cancel</button>
+        <button class="wizard-btn wizard-btn-primary" id="settings-save">Save & Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Wizard Modal -->
+  <div class="modal-overlay" id="wizard-modal">
+    <div class="wizard">
+      <div class="wizard-header">
+        <span class="wizard-title" id="wizard-title">Create New Daemon</span>
+        <button class="wizard-close" id="wizard-close">x</button>
+      </div>
+
+      <div class="wizard-progress">
+        <div class="wizard-step-indicator" data-step="1"></div>
+        <div class="wizard-step-indicator" data-step="2"></div>
+        <div class="wizard-step-indicator" data-step="3"></div>
+        <div class="wizard-step-indicator" data-step="4"></div>
+      </div>
+
+      <div class="wizard-body">
+        <!-- Step 1: Select Daemon Type -->
+        <div class="wizard-step" data-step="1">
+          <h3 class="wizard-step-title">Select Daemon Type</h3>
+          <p class="wizard-step-description">Choose which AI provider to use. Only installed CLI tools are available.</p>
+
+          <div class="wizard-loading" id="cli-loading">
+            <div class="spinner"></div>
+            <span>Checking installed CLI tools...</span>
+          </div>
+
+          <div class="wizard-options" id="daemon-options" style="display: none;">
+            <div class="wizard-option" data-daemon="claude">
+              <div class="wizard-option-icon">C</div>
+              <div class="wizard-option-content">
+                <div class="wizard-option-name">Claude</div>
+                <div class="wizard-option-desc">Anthropic's Claude Code CLI</div>
+              </div>
+              <span class="wizard-option-status" id="claude-status">Checking...</span>
+            </div>
+
+            <div class="wizard-option" data-daemon="gemini">
+              <div class="wizard-option-icon">G</div>
+              <div class="wizard-option-content">
+                <div class="wizard-option-name">Gemini</div>
+                <div class="wizard-option-desc">Google's Gemini CLI</div>
+              </div>
+              <span class="wizard-option-status" id="gemini-status">Checking...</span>
+            </div>
+
+            <div class="wizard-option" data-daemon="copilot">
+              <div class="wizard-option-icon">CP</div>
+              <div class="wizard-option-content">
+                <div class="wizard-option-name">Copilot</div>
+                <div class="wizard-option-desc">GitHub Copilot CLI</div>
+              </div>
+              <span class="wizard-option-status" id="copilot-status">Checking...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Select Model -->
+        <div class="wizard-step" data-step="2">
+          <h3 class="wizard-step-title">Select Model</h3>
+          <p class="wizard-step-description">Choose the AI model for this daemon.</p>
+
+          <div class="wizard-options" id="model-options">
+            <!-- Models populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Step 3: Name & Configure -->
+        <div class="wizard-step" data-step="3">
+          <h3 class="wizard-step-title">Name Your Daemon</h3>
+          <p class="wizard-step-description">Give your daemon a unique name and identifier.</p>
+
+          <div class="wizard-input-group">
+            <label class="wizard-label">Daemon Name</label>
+            <input type="text" class="wizard-input" id="daemon-name" placeholder="e.g., Code Assistant">
+          </div>
+
+          <div class="wizard-input-group">
+            <label class="wizard-label">Identifier (lowercase, no spaces)</label>
+            <input type="text" class="wizard-input" id="daemon-id" placeholder="e.g., code-assistant">
+          </div>
+        </div>
+
+        <!-- Step 4: System Prompt -->
+        <div class="wizard-step" data-step="4">
+          <h3 class="wizard-step-title">System Prompt</h3>
+          <p class="wizard-step-description">Select a template or write a custom system prompt.</p>
+
+          <div class="wizard-input-group">
+            <label class="wizard-label">Template</label>
+            <select class="wizard-input" id="prompt-template">
+              <!-- Templates populated dynamically -->
+            </select>
+          </div>
+
+          <div class="wizard-input-group">
+            <label class="wizard-label">System Prompt</label>
+            <textarea class="wizard-input wizard-textarea" id="system-prompt" placeholder="Enter the system prompt..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="wizard-footer">
+        <button class="wizard-btn wizard-btn-secondary" id="wizard-back" style="display: none;">Back</button>
+        <div class="wizard-spacer"></div>
+        <button class="wizard-btn wizard-btn-secondary" id="wizard-cancel">Cancel</button>
+        <button class="wizard-btn wizard-btn-primary" id="wizard-next" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    // ============ WINDOW CONTROLS ============
+    document.getElementById('btn-minimize').addEventListener('click', () => {
+      ipcRenderer.send('window-minimize');
+    });
+
+    document.getElementById('btn-maximize').addEventListener('click', () => {
+      ipcRenderer.send('window-maximize');
+    });
+
+    document.getElementById('btn-close').addEventListener('click', () => {
+      ipcRenderer.send('window-close');
+    });
+
+    ipcRenderer.on('window-maximized', (event, isMaximized) => {
+      // Could update button icon here if needed
+    });
+
+    // ============ WIZARD STATE ============
+    const wizardState = {
+      currentStep: 1,
+      totalSteps: 4,
+      daemonType: null,
+      model: null,
+      name: '',
+      id: '',
+      systemPrompt: '',
+      cliStatus: {},
+      promptTemplates: {},
+    };
+
+    // ============ WIZARD FUNCTIONS ============
+    const wizardModal = document.getElementById('wizard-modal');
+    const wizardSteps = document.querySelectorAll('.wizard-step');
+    const stepIndicators = document.querySelectorAll('.wizard-step-indicator');
+    const nextBtn = document.getElementById('wizard-next');
+    const backBtn = document.getElementById('wizard-back');
+
+    function openWizard(isInitialSetup = false) {
+      wizardState.currentStep = 1;
+      wizardState.daemonType = null;
+      wizardState.model = null;
+      wizardState.name = '';
+      wizardState.id = '';
+      wizardState.systemPrompt = '';
+      wizardState.isInitialSetup = isInitialSetup;
+
+      // Update title based on context
+      const titleEl = document.getElementById('wizard-title');
+      titleEl.textContent = isInitialSetup ? 'Welcome to Zeus - Setup Your Daemon' : 'Create New Daemon';
+
+      // Hide close button on initial setup (must complete)
+      document.getElementById('wizard-close').style.display = isInitialSetup ? 'none' : 'block';
+      document.getElementById('wizard-cancel').style.display = isInitialSetup ? 'none' : 'block';
+
+      wizardModal.classList.add('active');
+      updateWizardUI();
+      checkCliTools();
+      loadPromptTemplates();
+    }
+
+    function closeWizard() {
+      wizardModal.classList.remove('active');
+    }
+
+    function updateWizardUI() {
+      // Update steps visibility
+      wizardSteps.forEach(step => {
+        const stepNum = parseInt(step.dataset.step);
+        step.classList.toggle('active', stepNum === wizardState.currentStep);
+      });
+
+      // Update progress indicators
+      stepIndicators.forEach(indicator => {
+        const stepNum = parseInt(indicator.dataset.step);
+        indicator.classList.remove('completed', 'active');
+        if (stepNum < wizardState.currentStep) {
+          indicator.classList.add('completed');
+        } else if (stepNum === wizardState.currentStep) {
+          indicator.classList.add('active');
+        }
+      });
+
+      // Update buttons
+      backBtn.style.display = wizardState.currentStep > 1 ? 'block' : 'none';
+      nextBtn.textContent = wizardState.currentStep === wizardState.totalSteps ? 'Create' : 'Next';
+
+      // Validate current step
+      validateCurrentStep();
+    }
+
+    function validateCurrentStep() {
+      let isValid = false;
+
+      switch (wizardState.currentStep) {
+        case 1:
+          isValid = wizardState.daemonType !== null;
+          break;
+        case 2:
+          isValid = wizardState.model !== null;
+          break;
+        case 3:
+          isValid = wizardState.name.trim() !== '' && wizardState.id.trim() !== '';
+          break;
+        case 4:
+          isValid = wizardState.systemPrompt.trim() !== '';
+          break;
+      }
+
+      nextBtn.disabled = !isValid;
+    }
+
+    async function checkCliTools() {
+      const loading = document.getElementById('cli-loading');
+      const options = document.getElementById('daemon-options');
+
+      loading.style.display = 'flex';
+      options.style.display = 'none';
+
+      try {
+        const status = await ipcRenderer.invoke('check-cli-tools');
+        wizardState.cliStatus = status;
+
+        // Update UI
+        updateCliStatus('claude', status.claude);
+        updateCliStatus('gemini', status.gemini);
+        updateCliStatus('copilot', status.copilot);
+
+        loading.style.display = 'none';
+        options.style.display = 'flex';
+      } catch (err) {
+        console.error('Failed to check CLI tools:', err);
+        loading.innerHTML = '<span style="color: var(--accent-red);">Failed to check CLI tools</span>';
+      }
+    }
+
+    function updateCliStatus(daemon, status) {
+      const statusEl = document.getElementById(`${daemon}-status`);
+      const optionEl = document.querySelector(`[data-daemon="${daemon}"]`);
+
+      if (status.installed) {
+        statusEl.textContent = 'Installed';
+        statusEl.classList.add('installed');
+        statusEl.classList.remove('not-installed');
+        optionEl.classList.remove('disabled');
+      } else {
+        statusEl.textContent = 'Not installed';
+        statusEl.classList.add('not-installed');
+        statusEl.classList.remove('installed');
+        optionEl.classList.add('disabled');
+      }
+    }
+
+    async function loadPromptTemplates() {
+      // Load default template for selected provider
+      try {
+        const template = await ipcRenderer.invoke('get-default-template', wizardState.daemonType || 'claude');
+
+        if (template) {
+          // Pre-fill from template
+          document.getElementById('system-prompt').value = template.systemPrompt || '';
+          wizardState.systemPrompt = template.systemPrompt || '';
+
+          // Also set default name if not already set
+          if (!wizardState.name) {
+            document.getElementById('daemon-name').value = template.name || '';
+            wizardState.name = template.name || '';
+
+            // Auto-generate ID
+            const autoId = (template.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            document.getElementById('daemon-id').value = autoId;
+            wizardState.id = autoId;
+          }
+
+          // Set model from template
+          if (template.model && !wizardState.model) {
+            wizardState.model = template.model;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load template:', err);
+        // Fallback
+        const defaultPrompt = 'You are a helpful AI assistant.';
+        document.getElementById('system-prompt').value = defaultPrompt;
+        wizardState.systemPrompt = defaultPrompt;
+      }
+
+      // Hide template selector - we just use the default
+      const select = document.getElementById('prompt-template');
+      select.style.display = 'none';
+      select.parentElement.style.display = 'none';
+    }
+
+    async function loadModelOptions(daemonType) {
+      try {
+        const models = await ipcRenderer.invoke('get-model-options', daemonType);
+        const container = document.getElementById('model-options');
+        container.innerHTML = '';
+
+        // Get template to find default model
+        const template = await ipcRenderer.invoke('get-default-template', daemonType);
+        const defaultModel = template?.model || models[0]?.id;
+
+        models.forEach(model => {
+          const option = document.createElement('div');
+          option.className = 'wizard-option';
+          option.dataset.model = model.id;
+
+          // Auto-select default model from template
+          if (model.id === defaultModel && !wizardState.model) {
+            option.classList.add('selected');
+            wizardState.model = model.id;
+          }
+
+          option.innerHTML = `
+            <div class="wizard-option-icon">${model.name.charAt(0)}</div>
+            <div class="wizard-option-content">
+              <div class="wizard-option-name">${model.name}</div>
+              <div class="wizard-option-desc">${model.description}</div>
+            </div>
+          `;
+          option.addEventListener('click', () => selectModel(model.id));
+          container.appendChild(option);
+        });
+
+        validateCurrentStep();
+      } catch (err) {
+        console.error('Failed to load models:', err);
+      }
+    }
+
+    function selectDaemon(daemon) {
+      if (wizardState.cliStatus[daemon]?.installed) {
+        wizardState.daemonType = daemon;
+
+        document.querySelectorAll('#daemon-options .wizard-option').forEach(opt => {
+          opt.classList.toggle('selected', opt.dataset.daemon === daemon);
+        });
+
+        validateCurrentStep();
+      }
+    }
+
+    function selectModel(model) {
+      wizardState.model = model;
+
+      document.querySelectorAll('#model-options .wizard-option').forEach(opt => {
+        opt.classList.toggle('selected', opt.dataset.model === model);
+      });
+
+      validateCurrentStep();
+    }
+
+    async function createDaemon() {
+      const config = {
+        id: wizardState.id,
+        name: wizardState.name,
+        type: wizardState.daemonType,
+        model: wizardState.model,
+        systemPrompt: wizardState.systemPrompt,
+        createdAt: new Date().toISOString(),
+        isMain: true, // Mark as main daemon
+      };
+
+      // Show loading in wizard
+      const wizardBody = document.querySelector('.wizard-body');
+      const originalContent = wizardBody.innerHTML;
+      wizardBody.innerHTML = `
+        <div class="wizard-loading">
+          <div class="spinner"></div>
+          <span id="wizard-loading-text">Saving configuration...</span>
+        </div>
+      `;
+
+      // Disable buttons
+      nextBtn.disabled = true;
+      backBtn.disabled = true;
+
+      const setWizardLoading = (text) => {
+        const el = document.getElementById('wizard-loading-text');
+        if (el) el.textContent = text;
+      };
+
+      try {
+        // Save config
+        await ipcRenderer.invoke('save-daemon-config', config);
+        setWizardLoading('Starting daemon...');
+
+        // Check if gateway is running
+        const gateway = await ipcRenderer.invoke('check-gateway');
+
+        if (!gateway.running) {
+          setWizardLoading('Starting gateway...');
+          const gwResult = await ipcRenderer.invoke('start-gateway');
+          if (!gwResult.success) {
+            throw new Error(gwResult.error || 'Failed to start gateway');
+          }
+          // Wait for gateway
+          await new Promise(r => setTimeout(r, 2000));
+        }
+
+        // Spawn the daemon via gateway
+        setWizardLoading('Spawning daemon container...');
+        const result = await ipcRenderer.invoke('spawn-daemon', {
+          provider: config.type,
+          model: config.model,
+        });
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to spawn daemon');
+        }
+
+        // Wait for daemon to be healthy
+        setWizardLoading('Waiting for daemon to be ready...');
+        let attempts = 0;
+        let healthy = false;
+
+        while (attempts < 30 && !healthy) {
+          await new Promise(r => setTimeout(r, 1000));
+          const daemons = await ipcRenderer.invoke('get-running-daemons');
+          const healthyDaemon = daemons.find(d => d.health === 'healthy');
+          if (healthyDaemon) {
+            healthy = true;
+            currentRunningDaemon = healthyDaemon;
+            currentDaemonConfig = config;
+          }
+          attempts++;
+        }
+
+        if (!healthy) {
+          throw new Error('Daemon did not become healthy in time');
+        }
+
+        // Success!
+        closeWizard();
+        enableDashboard();
+        updateRunningDaemon(currentRunningDaemon);
+
+      } catch (err) {
+        console.error('Failed to create daemon:', err);
+
+        // Show error in wizard
+        wizardBody.innerHTML = `
+          <div style="text-align: center; padding: 40px;">
+            <div style="font-size: 48px; color: var(--accent-red); margin-bottom: 16px;">!</div>
+            <h3 style="margin-bottom: 8px;">Failed to Start Daemon</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 24px;">${err.message}</p>
+            <button class="wizard-btn wizard-btn-primary" onclick="retryCreateDaemon()">Retry</button>
+          </div>
+        `;
+        nextBtn.style.display = 'none';
+        backBtn.style.display = 'none';
+      }
+    }
+
+    // Retry creating daemon
+    async function retryCreateDaemon() {
+      // Reset wizard to last step and try again
+      wizardState.currentStep = wizardState.totalSteps;
+      updateWizardUI();
+      nextBtn.style.display = 'block';
+      backBtn.style.display = 'block';
+      nextBtn.disabled = false;
+      backBtn.disabled = false;
+    }
+
+    // ============ EVENT LISTENERS ============
+
+    // Open wizard from nav (not initial setup)
+    document.getElementById('btn-new-daemon').addEventListener('click', () => openWizard(false));
+
+    // New session button
+    document.getElementById('btn-new-session').addEventListener('click', () => {
+      if (currentRunningDaemon) {
+        createNewSession();
+      }
+    });
+
+    // Close wizard (only if not initial setup)
+    document.getElementById('wizard-close').addEventListener('click', () => {
+      if (!wizardState.isInitialSetup) closeWizard();
+    });
+    document.getElementById('wizard-cancel').addEventListener('click', () => {
+      if (!wizardState.isInitialSetup) closeWizard();
+    });
+
+    wizardModal.addEventListener('click', (e) => {
+      if (e.target === wizardModal && !wizardState.isInitialSetup) closeWizard();
+    });
+
+    // Navigation
+    nextBtn.addEventListener('click', () => {
+      if (wizardState.currentStep < wizardState.totalSteps) {
+        wizardState.currentStep++;
+        updateWizardUI();
+
+        // Load model options when entering step 2
+        if (wizardState.currentStep === 2) {
+          loadModelOptions(wizardState.daemonType);
+        }
+      } else {
+        createDaemon();
+      }
+    });
+
+    backBtn.addEventListener('click', () => {
+      if (wizardState.currentStep > 1) {
+        wizardState.currentStep--;
+        updateWizardUI();
+      }
+    });
+
+    // Daemon selection
+    document.querySelectorAll('#daemon-options .wizard-option').forEach(option => {
+      option.addEventListener('click', () => selectDaemon(option.dataset.daemon));
+    });
+
+    // Name inputs
+    document.getElementById('daemon-name').addEventListener('input', (e) => {
+      wizardState.name = e.target.value;
+
+      // Auto-generate ID
+      const idInput = document.getElementById('daemon-id');
+      if (!idInput.dataset.manual) {
+        const autoId = e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        idInput.value = autoId;
+        wizardState.id = autoId;
+      }
+
+      validateCurrentStep();
+    });
+
+    document.getElementById('daemon-id').addEventListener('input', (e) => {
+      e.target.dataset.manual = 'true';
+      wizardState.id = e.target.value;
+      validateCurrentStep();
+    });
+
+    // Template selection
+    document.getElementById('prompt-template').addEventListener('change', (e) => {
+      const template = wizardState.promptTemplates[e.target.value];
+      if (template) {
+        document.getElementById('system-prompt').value = template.prompt;
+        wizardState.systemPrompt = template.prompt;
+        validateCurrentStep();
+      }
+    });
+
+    // System prompt
+    document.getElementById('system-prompt').addEventListener('input', (e) => {
+      wizardState.systemPrompt = e.target.value;
+      validateCurrentStep();
+    });
+
+    // ============ LOADING SCREEN ============
+    const loadingScreen = document.getElementById('loading-screen');
+    const loadingText = document.getElementById('loading-text');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const loadingError = document.getElementById('loading-error');
+    const loadingActions = document.getElementById('loading-actions');
+
+    function setLoadingText(text) {
+      if (loadingText) loadingText.textContent = text;
+    }
+
+    function hideLoadingScreen() {
+      if (loadingScreen) loadingScreen.classList.add('hidden');
+    }
+
+    function showLoadingScreen() {
+      if (loadingScreen) loadingScreen.classList.remove('hidden');
+      // Reset all steps
+      ['docker', 'gateway', 'containers', 'daemon'].forEach(step => {
+        setStepStatus(step, 'pending');
+      });
+      loadingError.style.display = 'none';
+      loadingActions.style.display = 'none';
+      loadingSpinner.style.display = 'block';
+    }
+
+    function setStepStatus(stepId, status, text = null) {
+      const step = document.getElementById(`step-${stepId}`);
+      if (!step) return;
+
+      step.className = `loading-step ${status}`;
+      const icon = step.querySelector('.loading-step-icon');
+      const span = step.querySelector('span');
+
+      if (status === 'success') {
+        icon.textContent = '✓';
+      } else if (status === 'error') {
+        icon.textContent = '✕';
+      } else if (status === 'active') {
+        icon.textContent = '●';
+      }
+
+      if (text) span.textContent = text;
+    }
+
+    function showLoadingError(message) {
+      loadingSpinner.style.display = 'none';
+      loadingError.textContent = message;
+      loadingError.style.display = 'block';
+      loadingActions.style.display = 'flex';
+    }
+
+    // Listen for app events from main process
+    ipcRenderer.on('app-starting', () => {
+      setLoadingText('Starting Zeus...');
+    });
+
+    ipcRenderer.on('gateway-ready', (event, data) => {
+      setStepStatus('gateway', 'success', `Gateway ready (${data?.mode || 'process'} mode)`);
+      continueStartup();
+    });
+
+    ipcRenderer.on('gateway-failed', () => {
+      setStepStatus('gateway', 'error', 'Gateway failed to start');
+      showLoadingError('Failed to start the gateway. Check if port 3001 is available.');
+    });
+
+    // ============ STARTUP FLOW ============
+    async function startupFlow() {
+      showLoadingScreen();
+      setLoadingText('Initializing...');
+
+      // Step 1: Check Docker
+      setStepStatus('docker', 'active', 'Checking Docker...');
+      const mode = await ipcRenderer.invoke('get-gateway-mode');
+
+      if (mode === 'container') {
+        const dockerOk = await ipcRenderer.invoke('check-docker');
+        if (!dockerOk) {
+          setStepStatus('docker', 'error', 'Docker not running');
+          showLoadingError('Docker is not running. Please start Docker Desktop and try again.');
+          return;
+        }
+      }
+      setStepStatus('docker', 'success', mode === 'container' ? 'Docker running' : 'Process mode (no Docker)');
+
+      // Step 2: Check/Start Gateway
+      setStepStatus('gateway', 'active', 'Starting Gateway...');
+      setLoadingText('Starting Gateway...');
+
+      const gateway = await ipcRenderer.invoke('check-gateway');
+      if (!gateway.running) {
+        // Gateway will be started by main process, wait for event
+        const result = await ipcRenderer.invoke('start-gateway');
+        if (!result.success) {
+          setStepStatus('gateway', 'error', 'Gateway failed to start');
+          showLoadingError(result.error || 'Failed to start gateway');
+          return;
+        }
+      } else {
+        setStepStatus('gateway', 'success', `Gateway ready (${gateway.mode || 'process'} mode)`);
+        continueStartup();
+      }
+    }
+
+    async function continueStartup() {
+      // Step 3: Check Containers/Daemons
+      setStepStatus('containers', 'active', 'Checking containers...');
+      setLoadingText('Checking for running daemons...');
+
+      try {
+        const daemons = await ipcRenderer.invoke('get-running-daemons');
+
+        if (daemons && daemons.length > 0) {
+          // Found running daemons
+          setStepStatus('containers', 'success', `Found ${daemons.length} container(s)`);
+
+          // Check health
+          const healthyDaemons = daemons.filter(d => d.health === 'healthy');
+
+          if (healthyDaemons.length > 0) {
+            setStepStatus('daemon', 'success', 'Daemon connected');
+            hideLoadingScreen();
+            updateRunningDaemon(healthyDaemons[0]);
+            return;
+          } else {
+            // Containers exist but not healthy - offer to clear
+            setStepStatus('daemon', 'error', 'Daemon unhealthy');
+            showLoadingError('Found containers but they are not responding. Clear and retry?');
+            return;
+          }
+        }
+
+        setStepStatus('containers', 'success', 'No running containers');
+
+        // Step 4: Check for saved configs
+        setStepStatus('daemon', 'active', 'Checking daemon config...');
+        const configs = await ipcRenderer.invoke('load-daemon-configs');
+
+        if (configs && configs.length > 0) {
+          // Have config - try to start daemon
+          setLoadingText(`Starting ${configs[0].name}...`);
+
+          const result = await ipcRenderer.invoke('spawn-daemon', {
+            provider: configs[0].type,
+            model: configs[0].model,
+          });
+
+          if (result.success) {
+            setStepStatus('daemon', 'success', 'Daemon started');
+            hideLoadingScreen();
+
+            // Wait a moment for daemon to be ready
+            await new Promise(r => setTimeout(r, 1000));
+            const daemons = await ipcRenderer.invoke('get-running-daemons');
+            if (daemons && daemons.length > 0) {
+              updateRunningDaemon(daemons[0]);
+            } else {
+              currentDaemonConfig = configs[0];
+              showSpawnPrompt(configs[0]);
+            }
+          } else {
+            setStepStatus('daemon', 'error', 'Failed to start daemon');
+            showLoadingError(result.error || 'Failed to start daemon');
+          }
+        } else {
+          // No config - show wizard
+          setStepStatus('daemon', 'success', 'No daemon configured');
+          hideLoadingScreen();
+          showFirstTimeSetup();
+        }
+      } catch (err) {
+        console.error('Startup error:', err);
+        setStepStatus('containers', 'error', 'Error checking containers');
+        showLoadingError(err.message);
+      }
+    }
+
+    // Clear all containers and retry
+    async function clearAllContainers() {
+      setLoadingText('Clearing containers...');
+      loadingError.style.display = 'none';
+      loadingActions.style.display = 'none';
+      loadingSpinner.style.display = 'block';
+
+      try {
+        await ipcRenderer.invoke('stop-all-daemons');
+        await new Promise(r => setTimeout(r, 2000));
+        startupFlow();
+      } catch (err) {
+        console.error('Failed to clear containers:', err);
+        showLoadingError('Failed to clear containers: ' + err.message);
+      }
+    }
+
+    // Button handlers
+    document.getElementById('btn-clear-containers').addEventListener('click', clearAllContainers);
+    document.getElementById('btn-retry-startup').addEventListener('click', startupFlow);
+
+    // Start the flow
+    startupFlow();
+
+    function updateStatus(text, state) {
+      const statusText = document.querySelector('.avatar-status span:last-child');
+      const statusDot = document.querySelector('.status-dot');
+
+      if (statusText) statusText.textContent = text;
+
+      if (statusDot) {
+        statusDot.classList.remove('thinking', 'online', 'offline');
+        if (state === 'thinking') {
+          statusDot.classList.add('thinking');
+        } else if (state === 'offline') {
+          statusDot.style.background = 'var(--accent-red)';
+        } else {
+          statusDot.style.background = 'var(--accent-green)';
+        }
+      }
+    }
+
+    // ============ UI HELPERS ============
+    const contentBody = document.getElementById('content-body');
+
+    function showContent(html, centered = false) {
+      if (contentBody) {
+        contentBody.innerHTML = html;
+        contentBody.classList.toggle('centered', centered);
+      }
+    }
+
+    function showEmptyState(title, subtitle, buttons = '') {
+      showContent(`
+        <div class="content-placeholder">
+          <h2>${title}</h2>
+          <div class="subtitle" style="margin-bottom: 24px;">${subtitle}</div>
+          ${buttons}
+        </div>
+      `, true);
+    }
+
+    // Global chat instance
+    let chatInstance = null;
+
+    function showChatReady(daemon, sessionId = null) {
+      // Clear content and remove centered class (ChatComponent has its own input area)
+      contentBody.innerHTML = '';
+      contentBody.classList.remove('centered');
+
+      // Destroy existing chat instance if any
+      if (chatInstance) {
+        chatInstance.destroy();
+      }
+
+      // Create new chat component
+      chatInstance = new ChatComponent({
+        container: contentBody,
+        wsUrl: 'ws://localhost:3001',
+        provider: daemon.provider,
+        model: daemon.model,
+        sessionId: sessionId,
+        avatarIcon: daemon.provider.charAt(0).toUpperCase(),
+        onStreamingChange: (streaming) => {
+          const avatarRing = document.querySelector('.avatar-ring');
+          const avatar = document.querySelector('.avatar');
+          const statusDot = document.getElementById('status-dot');
+          const statusText = document.getElementById('status-text');
+
+          if (streaming) {
+            avatarRing?.classList.add('streaming');
+            avatar?.classList.add('streaming');
+            statusDot?.classList.add('thinking');
+            if (statusText) statusText.textContent = 'Thinking...';
+          } else {
+            avatarRing?.classList.remove('streaming');
+            avatar?.classList.remove('streaming');
+            statusDot?.classList.remove('thinking');
+            if (statusText) statusText.textContent = 'Online';
+          }
+        },
+        onMessageAdded: async (message) => {
+          // Save message to session
+          if (currentSessionId) {
+            try {
+              await ipcRenderer.invoke('save-session-message', {
+                sessionId: currentSessionId,
+                message: message
+              });
+              // Refresh sessions list to update preview
+              loadSessions();
+            } catch (err) {
+              console.error('[Chat] Failed to save message:', err);
+            }
+          }
+        },
+        onError: (err) => {
+          console.error('[Chat] Error:', err);
+        },
+        onConnected: () => {
+          console.log('[Chat] Connected to gateway');
+        }
+      });
+
+      // Connect and load history if session provided
+      chatInstance.connect();
+
+      if (sessionId) {
+        loadSessionHistory(sessionId);
+      }
+    }
+
+    async function loadSessionHistory(sessionId) {
+      if (!chatInstance) return;
+
+      try {
+        const history = await ipcRenderer.invoke('get-session-history', sessionId);
+        if (history && history.messages && history.messages.length > 0) {
+          chatInstance.loadHistory(history.messages);
+        }
+      } catch (err) {
+        console.error('[Chat] Failed to load session history:', err);
+      }
+    }
+
+    function updateAvatar(name, icon, status, substatus = '') {
+      document.getElementById('avatar-name').textContent = name;
+      document.getElementById('avatar-icon').textContent = icon;
+      document.getElementById('status-text').textContent = status;
+      document.getElementById('avatar-substatus').textContent = substatus;
+    }
+
+    function showSpawnPrompt(config) {
+      // Disable sidebar until daemon is running
+      document.querySelector('.sidebar').style.opacity = '0.3';
+      document.querySelector('.sidebar').style.pointerEvents = 'none';
+
+      updateAvatar(config.name, config.type.charAt(0).toUpperCase(), 'Stopped');
+      showEmptyState(
+        config.name,
+        `Main daemon is configured but not running`,
+        `<button class="wizard-btn wizard-btn-primary" onclick="spawnDaemon('${config.type}', '${config.model}')">
+          Start Daemon
+        </button>`
+      );
+    }
+
+    function showFirstTimeSetup() {
+      updateAvatar('No Daemon', '?', 'Not configured');
+
+      // Hide main content, show setup requirement
+      document.querySelector('.sidebar').style.opacity = '0.3';
+      document.querySelector('.sidebar').style.pointerEvents = 'none';
+
+      showEmptyState(
+        'Welcome to Zeus',
+        'You need to configure a main daemon to continue',
+        `<button class="wizard-btn wizard-btn-primary" onclick="openWizard(true)">
+          Setup Main Daemon
+        </button>`
+      );
+    }
+
+    function enableDashboard() {
+      // Re-enable dashboard UI
+      document.querySelector('.sidebar').style.opacity = '1';
+      document.querySelector('.sidebar').style.pointerEvents = 'auto';
+    }
+
+    async function spawnDaemon(provider, model) {
+      updateStatus('Starting...', 'thinking');
+      showContent(`
+        <div class="content-placeholder">
+          <div class="spinner" style="width: 48px; height: 48px;"></div>
+          <h2 style="margin-top: 24px;">Starting daemon...</h2>
+          <p id="spawn-status" style="color: var(--text-secondary); margin-top: 8px;">Initializing...</p>
+        </div>
+      `, true);
+
+      const setSpawnStatus = (text) => {
+        const el = document.getElementById('spawn-status');
+        if (el) el.textContent = text;
+      };
+
+      try {
+        setSpawnStatus('Spawning container...');
+        const result = await ipcRenderer.invoke('spawn-daemon', { provider, model });
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to spawn daemon');
+        }
+
+        // Wait for healthy
+        setSpawnStatus('Waiting for daemon to be ready...');
+        let attempts = 0;
+        let healthy = false;
+
+        while (attempts < 30 && !healthy) {
+          await new Promise(r => setTimeout(r, 1000));
+          const daemons = await ipcRenderer.invoke('get-running-daemons');
+          const healthyDaemon = daemons.find(d => d.health === 'healthy');
+          if (healthyDaemon) {
+            healthy = true;
+            currentRunningDaemon = healthyDaemon;
+          }
+          attempts++;
+          setSpawnStatus(`Waiting for daemon to be ready... (${attempts}s)`);
+        }
+
+        if (!healthy) {
+          throw new Error('Daemon did not become healthy in time');
+        }
+
+        // Success - enable dashboard
+        enableDashboard();
+        updateRunningDaemon(currentRunningDaemon);
+
+      } catch (err) {
+        updateStatus('Failed', 'offline');
+        console.error('Failed to spawn daemon:', err);
+        showEmptyState(
+          'Failed to Start',
+          err.message || 'Unknown error',
+          `<button class="wizard-btn wizard-btn-primary" onclick="spawnDaemon('${provider}', '${model}')">Retry</button>
+           <button class="wizard-btn wizard-btn-secondary" onclick="openWizard(true)" style="margin-left: 12px;">Reconfigure</button>`
+        );
+      }
+    }
+
+    async function updateRunningDaemon(daemon) {
+      // Enable dashboard - we have a running daemon
+      enableDashboard();
+
+      updateAvatar(
+        daemon.name,
+        daemon.provider.charAt(0).toUpperCase(),
+        'Online',
+        daemon.model || ''
+      );
+      updateStatus('Online', 'online');
+
+      // Load sessions list first
+      await loadSessions();
+
+      // If no current session, create one or use the latest
+      if (!currentSessionId) {
+        try {
+          const sessions = await ipcRenderer.invoke('get-sessions');
+          if (sessions && sessions.length > 0) {
+            // Use the most recent session
+            currentSessionId = sessions[0].id;
+            showChatReady(daemon, currentSessionId);
+          } else {
+            // Create a new session
+            const session = await ipcRenderer.invoke('create-session', {
+              provider: daemon.provider,
+              model: daemon.model
+            });
+            if (session) {
+              currentSessionId = session.id;
+              loadSessions();
+            }
+            showChatReady(daemon, currentSessionId);
+          }
+        } catch (err) {
+          console.error('[Sessions] Error:', err);
+          showChatReady(daemon);
+        }
+      } else {
+        showChatReady(daemon, currentSessionId);
+      }
+    }
+
+    // ============ SESSIONS ============
+    let currentSessionId = null;
+
+    async function loadSessions() {
+      const sessionsList = document.getElementById('sessions-list');
+      if (!sessionsList) return;
+
+      try {
+        const sessions = await ipcRenderer.invoke('get-sessions');
+
+        if (!sessions || sessions.length === 0) {
+          sessionsList.innerHTML = `
+            <div class="thread-empty">No sessions yet</div>
+          `;
+          return;
+        }
+
+        // Group sessions by date
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const groups = {
+          today: [],
+          yesterday: [],
+          older: []
+        };
+
+        for (const session of sessions) {
+          const sessionDate = new Date(session.updatedAt || session.createdAt);
+          if (isSameDay(sessionDate, today)) {
+            groups.today.push(session);
+          } else if (isSameDay(sessionDate, yesterday)) {
+            groups.yesterday.push(session);
+          } else {
+            groups.older.push(session);
+          }
+        }
+
+        let html = '';
+
+        if (groups.today.length > 0) {
+          html += renderSessionGroup('Today', groups.today);
+        }
+        if (groups.yesterday.length > 0) {
+          html += renderSessionGroup('Yesterday', groups.yesterday);
+        }
+        if (groups.older.length > 0) {
+          html += renderSessionGroup('Older', groups.older);
+        }
+
+        sessionsList.innerHTML = html;
+
+        // Add click handlers
+        sessionsList.querySelectorAll('.thread-item').forEach(item => {
+          item.addEventListener('click', () => {
+            const sessionId = item.dataset.sessionId;
+            selectSession(sessionId);
+          });
+        });
+
+      } catch (err) {
+        console.error('[Sessions] Failed to load sessions:', err);
+        sessionsList.innerHTML = `
+          <div class="thread-empty">Failed to load sessions</div>
+        `;
+      }
+    }
+
+    function isSameDay(d1, d2) {
+      return d1.getFullYear() === d2.getFullYear() &&
+             d1.getMonth() === d2.getMonth() &&
+             d1.getDate() === d2.getDate();
+    }
+
+    function renderSessionGroup(title, sessions) {
+      const items = sessions.map(s => {
+        const time = new Date(s.updatedAt || s.createdAt);
+        const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const preview = s.preview || s.title || 'New conversation';
+        return `
+          <div class="thread-item ${s.id === currentSessionId ? 'active' : ''}" data-session-id="${s.id}">
+            <span class="thread-title">${escapeHtmlSimple(preview.slice(0, 30))}${preview.length > 30 ? '...' : ''}</span>
+            <span class="time">${timeStr}</span>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div class="thread-group">
+          <div class="thread-group-header">
+            <span class="icon">></span>
+            ${title}
+          </div>
+          ${items}
+        </div>
+      `;
+    }
+
+    function escapeHtmlSimple(text) {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    async function selectSession(sessionId) {
+      currentSessionId = sessionId;
+
+      // Update active state in UI
+      document.querySelectorAll('.thread-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.sessionId === sessionId);
+      });
+
+      // Load session into chat
+      if (currentRunningDaemon) {
+        showChatReady(currentRunningDaemon, sessionId);
+      }
+    }
+
+    async function createNewSession() {
+      try {
+        const session = await ipcRenderer.invoke('create-session', {
+          provider: currentRunningDaemon?.provider,
+          model: currentRunningDaemon?.model
+        });
+
+        if (session) {
+          currentSessionId = session.id;
+          loadSessions();
+          if (currentRunningDaemon) {
+            showChatReady(currentRunningDaemon, session.id);
+          }
+        }
+      } catch (err) {
+        console.error('[Sessions] Failed to create session:', err);
+      }
+    }
+
+    // ============ SETTINGS MODAL ============
+    const settingsModal = document.getElementById('settings-modal');
+    let currentDaemonConfig = null;
+    let currentRunningDaemon = null;
+
+    function openSettings() {
+      if (!currentDaemonConfig) return;
+
+      // Populate fields
+      document.getElementById('settings-name').value = currentDaemonConfig.name || '';
+      document.getElementById('settings-prompt').value = currentDaemonConfig.systemPrompt || '';
+
+      // Populate model options
+      const modelSelect = document.getElementById('settings-model');
+      const models = currentDaemonConfig.type === 'claude' ? [
+        { id: 'sonnet', name: 'Claude Sonnet' },
+        { id: 'opus', name: 'Claude Opus' },
+        { id: 'haiku', name: 'Claude Haiku' },
+        { id: 'claude-sonnet-4-5-20250514', name: 'Sonnet 4.5' },
+        { id: 'claude-opus-4-5-20250514', name: 'Opus 4.5' },
+      ] : currentDaemonConfig.type === 'gemini' ? [
+        { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
+        { id: 'gemini-2.0-pro', name: 'Gemini 2.0 Pro' },
+      ] : [
+        { id: 'gpt-4o', name: 'GPT-4o' },
+        { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
+      ];
+
+      modelSelect.innerHTML = models.map(m =>
+        `<option value="${m.id}" ${m.id === currentDaemonConfig.model ? 'selected' : ''}>${m.name}</option>`
+      ).join('');
+
+      // Populate template options
+      loadSettingsTemplates();
+
+      settingsModal.classList.add('active');
+    }
+
+    function closeSettings() {
+      settingsModal.classList.remove('active');
+    }
+
+    async function loadSettingsTemplates() {
+      // Templates are now file-based, managed via daemon WebSocket
+      const templateSelect = document.getElementById('settings-template');
+      templateSelect.innerHTML = '<option value="">Custom</option>';
+    }
+
+    async function saveSettings() {
+      const newName = document.getElementById('settings-name').value.trim();
+      const newModel = document.getElementById('settings-model').value;
+      const newPrompt = document.getElementById('settings-prompt').value.trim();
+
+      if (!newName) {
+        alert('Name is required');
+        return;
+      }
+
+      const modelChanged = newModel !== currentDaemonConfig.model;
+      const promptChanged = newPrompt !== currentDaemonConfig.systemPrompt;
+      const needsRestart = modelChanged || promptChanged;
+
+      // Update config
+      const updatedConfig = {
+        ...currentDaemonConfig,
+        name: newName,
+        model: newModel,
+        systemPrompt: newPrompt,
+        updatedAt: new Date().toISOString(),
+      };
+
+      closeSettings();
+      showContent(`
+        <div class="content-placeholder">
+          <div class="spinner" style="width: 48px; height: 48px;"></div>
+          <h2 style="margin-top: 24px;">Updating daemon...</h2>
+        </div>
+      `, true);
+
+      try {
+        // Save config
+        await ipcRenderer.invoke('update-daemon-config', updatedConfig);
+        currentDaemonConfig = updatedConfig;
+
+        if (needsRestart && currentRunningDaemon) {
+          // Stop current daemon
+          updateStatus('Restarting...', 'thinking');
+          await ipcRenderer.invoke('stop-daemon', {
+            processId: currentRunningDaemon.id,
+            provider: currentDaemonConfig.type
+          });
+
+          // Wait a moment
+          await new Promise(r => setTimeout(r, 1000));
+
+          // Spawn with new config
+          await ipcRenderer.invoke('spawn-daemon', {
+            provider: currentDaemonConfig.type,
+            model: newModel,
+          });
+        }
+
+        // Refresh state
+        checkGatewayAndDaemons();
+      } catch (err) {
+        console.error('Failed to save settings:', err);
+        updateStatus('Error', 'offline');
+        checkGatewayAndDaemons();
+      }
+    }
+
+    async function deleteDaemon() {
+      if (!confirm('Are you sure you want to delete this daemon?')) return;
+
+      closeSettings();
+      showContent(`
+        <div class="content-placeholder">
+          <div class="spinner" style="width: 48px; height: 48px;"></div>
+          <h2 style="margin-top: 24px;">Deleting daemon...</h2>
+        </div>
+      `, true);
+
+      try {
+        // Stop daemon if running
+        if (currentRunningDaemon) {
+          await ipcRenderer.invoke('stop-daemon', {
+            processId: currentRunningDaemon.id,
+            provider: currentDaemonConfig.type
+          });
+        }
+
+        // Delete config
+        await ipcRenderer.invoke('delete-daemon-config', currentDaemonConfig.id);
+
+        currentDaemonConfig = null;
+        currentRunningDaemon = null;
+
+        // Back to first-time setup
+        showFirstTimeSetup();
+      } catch (err) {
+        console.error('Failed to delete daemon:', err);
+        checkGatewayAndDaemons();
+      }
+    }
+
+    // Settings event listeners
+    document.getElementById('avatar-section').addEventListener('click', () => {
+      if (currentDaemonConfig) openSettings();
+    });
+
+    document.getElementById('settings-close').addEventListener('click', closeSettings);
+    document.getElementById('settings-cancel').addEventListener('click', closeSettings);
+    document.getElementById('settings-save').addEventListener('click', saveSettings);
+    document.getElementById('settings-delete').addEventListener('click', deleteDaemon);
+
+    settingsModal.addEventListener('click', (e) => {
+      if (e.target === settingsModal) closeSettings();
+    });
+
+    // Template selection in settings (templates are now file-based)
+    document.getElementById('settings-template').addEventListener('change', (e) => {
+      // Custom is the only option now
+    });
+
+    // Refresh daemon status (used after settings changes, etc.)
+    async function refreshDaemonStatus() {
+      try {
+        const gateway = await ipcRenderer.invoke('check-gateway');
+
+        if (!gateway.running) {
+          updateStatus('Gateway offline', 'offline');
+          showContent(`
+            <div class="content-placeholder">
+              <div class="icon" style="color: var(--accent-red);">!</div>
+              <h2>Gateway Offline</h2>
+              <div class="subtitle">The gateway is not running</div>
+              <button class="wizard-btn wizard-btn-primary" style="margin-top: 24px;" onclick="startupFlow()">
+                Reconnect
+              </button>
+            </div>
+          `, true);
+          return;
+        }
+
+        const daemons = await ipcRenderer.invoke('get-running-daemons');
+
+        if (!daemons || daemons.length === 0) {
+          currentRunningDaemon = null;
+          const configs = await ipcRenderer.invoke('load-daemon-configs');
+
+          if (!configs || configs.length === 0) {
+            currentDaemonConfig = null;
+            showFirstTimeSetup();
+          } else {
+            currentDaemonConfig = configs[0];
+            showSpawnPrompt(currentDaemonConfig);
+          }
+        } else {
+          currentRunningDaemon = daemons[0];
+          const configs = await ipcRenderer.invoke('load-daemon-configs');
+          currentDaemonConfig = configs.find(c => c.type === currentRunningDaemon.provider) || {
+            id: currentRunningDaemon.provider,
+            name: currentRunningDaemon.name,
+            type: currentRunningDaemon.provider,
+            model: currentRunningDaemon.model,
+            systemPrompt: '',
+          };
+          updateRunningDaemon(currentRunningDaemon);
+        }
+      } catch (err) {
+        console.error('Status check failed:', err);
+        updateStatus('Error', 'offline');
+      }
+    }
+
+    // Alias for backward compatibility
+    const checkGatewayAndDaemons = refreshDaemonStatus;
+
+  </script>
+</body>
+</html>

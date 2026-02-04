@@ -1,35 +1,26 @@
 {
   "name": "zeus-daemons",
   "version": "1.0.0",
-  "description": "Persistent daemon wrappers for AI CLI tools (Gemini, Copilot)",
+  "description": "Persistent daemon wrappers for AI CLI tools (Gemini, Claude, Copilot)",
   "type": "module",
   "main": "daemon.js",
   "bin": {
-    "zeus-daemon": "./daemon.js",
-    "zeus-gateway": "./gateway/index.js"
+    "zeus-daemon": "./daemon.js"
   },
   "scripts": {
     "start:gemini": "node daemon.js gemini",
     "start:claude": "node daemon.js claude",
     "start:copilot": "node daemon.js copilot",
-    "start:gateway": "node gateway/index.js",
     "dev:gemini": "DEBUG=true node daemon.js gemini",
     "dev:claude": "DEBUG=true node daemon.js claude",
     "dev:copilot": "DEBUG=true node daemon.js copilot",
-    "dev:gateway": "DEBUG=true node gateway/index.js",
-    "test": "node --test test/gateway.test.js",
+    "test": "node --test test/daemon.test.js",
     "test:all": "node --test test/*.test.js",
     "test:daemon": "node --test test/daemon.test.js",
-    "test:gateway": "node --test test/gateway.test.js",
     "test:session": "node --test test/session.test.js",
     "test:gemini": "SKIP_CLAUDE=1 SKIP_COPILOT=1 node --test test/daemon.test.js test/session.test.js",
     "test:claude": "SKIP_GEMINI=1 SKIP_COPILOT=1 node --test test/daemon.test.js test/session.test.js",
     "test:copilot": "SKIP_GEMINI=1 SKIP_CLAUDE=1 node --test test/daemon.test.js test/session.test.js",
-    "test:orchestration": "node --test test/orchestration.test.js",
-    "test:orchestration:claude": "SKIP_GEMINI=1 SKIP_COPILOT=1 node --test test/orchestration.test.js",
-    "test:orchestration:gemini": "SKIP_CLAUDE=1 SKIP_COPILOT=1 node --test test/orchestration.test.js",
-    "test:orchestration:integration": "INTEGRATION=1 node --test test/orchestration.test.js",
-    "test:integration": "INTEGRATION=1 node --test test/gateway.test.js",
     "test:debug": "DEBUG=true node --test test/*.test.js"
   },
   "dependencies": {

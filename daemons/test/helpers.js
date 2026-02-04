@@ -9,22 +9,23 @@ import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DAEMON_SCRIPT = path.join(__dirname, '..', 'daemon.js');
-const GATEWAY_SCRIPT = path.join(__dirname, '..', 'gateway', 'index.js');
+const DAEMONS_DIR = path.join(__dirname, '..');
+const GATEWAY_SCRIPT = path.join(__dirname, '..', '..', 'gateway', 'index.js');
 
 /**
- * Start a daemon process
+ * Start a daemon process directly from its folder
  */
 export async function startDaemon(type, port, options = {}) {
+  const daemonScript = path.join(DAEMONS_DIR, type, 'index.js');
   const env = {
     ...process.env,
     DEBUG: options.debug ? 'true' : 'false',
     ...options.env,
   };
 
-  const proc = spawn('node', [DAEMON_SCRIPT, type, port.toString()], {
+  const proc = spawn('node', [daemonScript, port.toString()], {
     env,
-    cwd: path.dirname(DAEMON_SCRIPT),
+    cwd: DAEMONS_DIR,
     stdio: options.stdio || ['pipe', 'pipe', 'pipe'],
   });
 

@@ -1,0 +1,96 @@
+# Zeus - Docker Compose for development and testing
+# Start with: docker-compose up -d
+# Stop with: docker-compose down
+
+version: '3.8'
+
+services:
+  # Gateway - Control plane for daemon orchestration
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - GATEWAY_MODE=container
+      - DEBUG=${DEBUG:-false}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # Allow gateway to manage containers
+      - ~/.zeus:/root/.zeus
+    depends_on:
+      - claude-daemon
+    networks:
+      - zeus-network
+
+  # Claude Daemon
+  claude-daemon:
+    build:
+      context: ./daemons
+      dockerfile: Dockerfile
+    ports:
+      - "4001:3456"
+    environment:
+      - PORT=3456
+      - WORKSPACE=/workspace
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-sonnet}
+      - DEBUG=${DEBUG:-false}
+    volumes:
+      - claude-workspace:/workspace
+      - ~/.claude:/root/.claude:ro  # Claude credentials (read-only)
+    networks:
+      - zeus-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3456/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # Gemini Daemon (optional - uncomment to use)
+  # gemini-daemon:
+  #   build:
+  #     context: ./daemons
+  #     dockerfile: Dockerfile
+  #   command: ["node", "daemon.js", "gemini", "3456"]
+  #   ports:
+  #     - "4002:3456"
+  #   environment:
+  #     - PORT=3456
+  #     - WORKSPACE=/workspace
+  #     - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.0-flash}
+  #     - DEBUG=${DEBUG:-false}
+  #   volumes:
+  #     - gemini-workspace:/workspace
+  #     - ~/.gemini:/root/.gemini:ro
+  #   networks:
+  #     - zeus-network
+
+  # Copilot Daemon (optional - uncomment to use)
+  # copilot-daemon:
+  #   build:
+  #     context: ./daemons
+  #     dockerfile: Dockerfile
+  #   command: ["node", "daemon.js", "copilot", "3456"]
+  #   ports:
+  #     - "4003:3456"
+  #   environment:
+  #     - PORT=3456
+  #     - WORKSPACE=/workspace
+  #     - COPILOT_MODEL=${COPILOT_MODEL:-gpt-4o}
+  #     - DEBUG=${DEBUG:-false}
+  #   volumes:
+  #     - copilot-workspace:/workspace
+  #     - ~/.config/gh:/root/.config/gh:ro
+  #   networks:
+  #     - zeus-network
+
+networks:
+  zeus-network:
+    driver: bridge
+
+volumes:
+  claude-workspace:
+  # gemini-workspace:
+  # copilot-workspace:

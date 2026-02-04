@@ -1,0 +1,21 @@
+{
+  "name": "zeus-gateway",
+  "version": "1.0.0",
+  "description": "Zeus Gateway - Interaction layer between clients and AI daemons",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "zeus-gateway": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "DEBUG=true node index.js"
+  },
+  "dependencies": {
+    "uuid": "^9.0.0",
+    "ws": "^8.14.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

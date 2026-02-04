@@ -1,0 +1,34 @@
+# Zeus Daemon: Gemini
+name: Gemini Assistant
+description: General-purpose Gemini CLI assistant
+provider: gemini
+icon: G
+
+# Model configuration
+model: gemini-2.5-flash
+models:
+  - id: gemini-2.5-flash
+    name: Gemini 2.5 Flash
+    description: Fast and efficient
+  - id: gemini-2.5-pro
+    name: Gemini 2.5 Pro
+    description: Most capable
+  - id: gemini-3-pro-preview
+    name: Gemini 3 Pro Preview
+    description: Latest preview
+
+# System prompt file (relative to this config)
+systemPromptFile: system-prompt.txt
+
+# Tools
+tools:
+  allowed: default
+
+# Permissions
+permissions:
+  mode: default
+
+# Session
+session:
+  persistence: true
+  verbose: false

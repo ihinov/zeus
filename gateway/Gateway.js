@@ -3,6 +3,8 @@
  *
  * Full lifecycle management: spawning, stopping, health monitoring,
  * port allocation, routing, and scaling.
+ *
+ * Uses Docker containers for daemon isolation and management.
  */
 
 import http from 'node:http';
@@ -11,7 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
-import { ProcessManager } from './ProcessManager.js';
+import { ContainerManager } from './ContainerManager.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -20,10 +22,13 @@ export class Gateway {
     this.port = options.port || 3000;
     this.sessionId = uuidv4();
 
-    // Process manager for lifecycle management (no containers)
-    this.processManager = new ProcessManager({
+    // Container manager for lifecycle management
+    const managerOptions = {
       healthCheckInterval: options.healthCheckInterval || 30000,
-    });
+    };
+
+    this.containerManager = new ContainerManager(managerOptions);
+    console.log('[Gateway] Using ContainerManager (Docker mode)');
 
     // Daemon connections: processId -> WebSocket
     this.daemonConnections = new Map();
@@ -47,32 +52,36 @@ export class Gateway {
     this.autoSpawn = options.autoSpawn || {};
 
     // Setup process manager events
-    this.setupProcessEvents();
+    this.setupContainerEvents();
   }
 
-  // ============ PROCESS EVENTS ============
+  // ============ DAEMON EVENTS ============
 
-  setupProcessEvents() {
-    this.processManager.on('process:started', (processInfo) => {
-      console.log(`[Gateway] Process started: ${processInfo.name}`);
-      this.connectToProcess(processInfo);
-      this.updateProviderPool(processInfo.provider);
+  setupContainerEvents() {
+    this.containerManager.on('container:started', async (info) => {
+      console.log(`[Gateway] Daemon started: ${info.name}`);
+      try {
+        await this.connectToProcess(info);
+        this.updateProviderPool(info.provider);
+      } catch (err) {
+        console.error(`[Gateway] Failed to connect to ${info.name}:`, err.message);
+      }
     });
 
-    this.processManager.on('process:stopped', (processInfo) => {
-      console.log(`[Gateway] Process stopped: ${processInfo.name}`);
-      this.disconnectFromProcess(processInfo.id);
-      this.updateProviderPool(processInfo.provider);
+    this.containerManager.on('container:stopped', (info) => {
+      console.log(`[Gateway] Daemon stopped: ${info.name}`);
+      this.disconnectFromProcess(info.id);
+      this.updateProviderPool(info.provider);
     });
 
-    this.processManager.on('process:failed', (processInfo) => {
-      console.log(`[Gateway] Process failed: ${processInfo.name}`);
+    this.containerManager.on('container:failed', (info) => {
+      console.log(`[Gateway] Daemon failed: ${info.name}`);
       this.broadcastToClients({
         type: 'provider_status',
         payload: {
-          provider: processInfo.provider,
+          provider: info.provider,
           status: 'degraded',
-          message: `Process ${processInfo.name} failed`,
+          message: `Daemon ${info.name} failed`,
         },
       });
     });
@@ -134,7 +143,7 @@ export class Gateway {
    * Update provider pool with healthy processes
    */
   updateProviderPool(provider) {
-    const healthy = this.processManager.getHealthy(provider);
+    const healthy = this.containerManager.getHealthy(provider);
     const ids = healthy.map((p) => p.id);
     this.providerPool.set(provider, ids);
     console.log(`[Gateway] Updated provider pool for ${provider}:`, ids);
@@ -150,7 +159,7 @@ export class Gateway {
 
     // Simple round-robin
     const processId = pool[Math.floor(Math.random() * pool.length)];
-    return this.processManager.get(processId);
+    return this.containerManager.get(processId);
   }
 
   // ============ MESSAGE HANDLING ============
@@ -161,7 +170,7 @@ export class Gateway {
   handleDaemonMessage(processId, data) {
     try {
       const message = JSON.parse(data.toString());
-      const processInfo = this.processManager.get(processId);
+      const processInfo = this.containerManager.get(processId);
 
       // Update process info on connected event
       if (message.type === 'connected') {
@@ -306,7 +315,7 @@ export class Gateway {
         case 'list_processes':
           this.sendToClient(clientId, {
             type: 'processes',
-            payload: this.processManager.list(message.provider),
+            payload: this.containerManager.list(message.provider),
           });
           break;
 
@@ -390,6 +399,11 @@ export class Gateway {
           await this.handleForwardToProcess(clientId, message);
           break;
 
+        // ============ CONTAINER LOGS (container mode only) ============
+        case 'get_logs':
+          await this.handleGetLogs(clientId, message);
+          break;
+
         default:
           this.sendToClient(clientId, {
             type: 'error',
@@ -419,7 +433,7 @@ export class Gateway {
     if (!processInfo && this.autoSpawn[provider]) {
       console.log(`[Gateway] Auto-spawning ${provider} process...`);
       try {
-        processInfo = await this.processManager.spawn(provider, {
+        processInfo = await this.containerManager.spawn(provider, {
           model: message.payload?.model,
         });
         await this.connectToProcess(processInfo);
@@ -448,10 +462,21 @@ export class Gateway {
     client.currentProcessId = processInfo.id;
 
     // Forward to process
-    this.sendToProcess(processInfo.id, {
-      type: 'chat',
-      payload: message.payload,
-    });
+    try {
+      this.sendToProcess(processInfo.id, {
+        type: 'chat',
+        payload: message.payload,
+      });
+    } catch (err) {
+      console.error(`[Gateway] Failed to send to process:`, err.message);
+      this.sendToClient(clientId, {
+        type: 'error',
+        payload: {
+          message: `Failed to communicate with ${provider} daemon: ${err.message}`,
+          hint: 'The daemon may still be starting up. Try again in a moment.',
+        },
+      });
+    }
   }
 
   /**
@@ -473,7 +498,7 @@ export class Gateway {
         payload: { provider },
       });
 
-      const processInfo = await this.processManager.spawn(provider, {
+      const processInfo = await this.containerManager.spawn(provider, {
         model: message.payload?.model,
         port: message.payload?.port,
       });
@@ -502,13 +527,13 @@ export class Gateway {
 
     try {
       if (processId) {
-        await this.processManager.stop(processId);
+        await this.containerManager.stop(processId);
         this.sendToClient(clientId, {
           type: 'stopped',
           payload: { processId },
         });
       } else if (provider) {
-        const count = await this.processManager.stopAll(provider);
+        const count = await this.containerManager.stopAll(provider);
         this.updateProviderPool(provider);
         this.sendToClient(clientId, {
           type: 'stopped',
@@ -543,24 +568,24 @@ export class Gateway {
       return;
     }
 
-    const current = this.processManager.getByProvider(provider).length;
+    const current = this.containerManager.getByProvider(provider).length;
     const diff = count - current;
 
     try {
       if (diff > 0) {
         // Scale up
         for (let i = 0; i < diff; i++) {
-          const processInfo = await this.processManager.spawn(provider, {
+          const processInfo = await this.containerManager.spawn(provider, {
             model: message.payload?.model,
           });
           await this.connectToProcess(processInfo);
         }
       } else if (diff < 0) {
         // Scale down
-        const processes = this.processManager.getByProvider(provider);
+        const processes = this.containerManager.getByProvider(provider);
         for (let i = 0; i < Math.abs(diff); i++) {
           if (processes[i]) {
-            await this.processManager.stop(processes[i].id);
+            await this.containerManager.stop(processes[i].id);
           }
         }
       }
@@ -614,7 +639,7 @@ export class Gateway {
     const provider = message.payload?.provider || message.provider;
 
     const models = {};
-    for (const processInfo of this.processManager.list(provider)) {
+    for (const processInfo of this.containerManager.list(provider)) {
       if (!models[processInfo.provider]) {
         models[processInfo.provider] = {
           models: processInfo.models || [],
@@ -666,7 +691,7 @@ export class Gateway {
     }
 
     // Check if process exists and is connected
-    const processInfo = this.processManager.get(processId);
+    const processInfo = this.containerManager.get(processId);
     if (!processInfo) {
       this.sendToClient(clientId, {
         type: 'error',
@@ -692,6 +717,37 @@ export class Gateway {
       type: message.type,
       payload: message.payload,
     });
+  }
+
+  // ============ CONTAINER LOGS ============
+
+  /**
+   * Handle get_logs request
+   */
+  async handleGetLogs(clientId, message) {
+    const processId = message.payload?.processId || message.processId;
+    const tail = message.payload?.tail || 100;
+
+    if (!processId) {
+      this.sendToClient(clientId, {
+        type: 'error',
+        payload: { message: 'processId required for get_logs' },
+      });
+      return;
+    }
+
+    try {
+      const logs = this.containerManager.getLogs(processId, { tail });
+      this.sendToClient(clientId, {
+        type: 'logs',
+        payload: { processId, logs },
+      });
+    } catch (err) {
+      this.sendToClient(clientId, {
+        type: 'error',
+        payload: { message: err.message },
+      });
+    }
   }
 
   // ============ SUBSCRIPTIONS ============
@@ -725,7 +781,7 @@ export class Gateway {
       this.subscriptions.get(processId).add(clientId);
       client.subscriptions.processes.add(processId);
 
-      const processInfo = this.processManager.get(processId);
+      const processInfo = this.containerManager.get(processId);
       console.log(`[Gateway] Client ${clientId} subscribed to process ${processId}`);
 
       this.sendToClient(clientId, {
@@ -752,7 +808,7 @@ export class Gateway {
         type: 'subscribed',
         payload: {
           provider,
-          processes: this.processManager.getByProvider(provider).map((p) => ({
+          processes: this.containerManager.getByProvider(provider).map((p) => ({
             id: p.id,
             name: p.name,
             health: p.health,
@@ -863,7 +919,7 @@ export class Gateway {
 
     return {
       processes: Array.from(client.subscriptions.processes).map((id) => {
-        const processInfo = this.processManager.get(id);
+        const processInfo = this.containerManager.get(id);
         return {
           id,
           name: processInfo?.name,
@@ -884,7 +940,7 @@ export class Gateway {
     const providers = {};
 
     for (const provider of ['gemini', 'claude', 'copilot']) {
-      const processes = this.processManager.getByProvider(provider);
+      const processes = this.containerManager.getByProvider(provider);
       const healthy = processes.filter((p) => p.health === 'healthy');
 
       providers[provider] = {
@@ -914,7 +970,7 @@ export class Gateway {
         uptime: process.uptime(),
         clients: this.clients.size,
       },
-      processes: this.processManager.getStatus(),
+      containers: this.containerManager.getStatus(),
       providers: this.getProvidersInfo(),
     };
   }
@@ -1009,7 +1065,134 @@ export class Gateway {
       if (url.pathname === '/processes') {
         const provider = url.searchParams.get('provider');
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(this.processManager.list(provider)));
+        res.end(JSON.stringify(this.containerManager.list(provider)));
+        return;
+      }
+
+      // Container logs
+      if (url.pathname.startsWith('/logs/')) {
+        const containerId = url.pathname.slice(6); // Remove '/logs/'
+        const tail = parseInt(url.searchParams.get('tail') || '100', 10);
+
+        try {
+          const logs = this.containerManager.getLogs(containerId, { tail });
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          res.end(logs);
+        } catch (err) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+      }
+
+      // Configuration endpoints
+      // GET /config/:provider - Get current config
+      // POST /config/:provider - Update config (restarts affected daemons)
+      if (url.pathname.startsWith('/config/')) {
+        const provider = url.pathname.slice(8); // Remove '/config/'
+
+        if (req.method === 'GET') {
+          try {
+            const config = this.containerManager.getConfig(provider);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(config));
+          } catch (err) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+          }
+          return;
+        }
+
+        if (req.method === 'POST') {
+          let body = '';
+          req.on('data', chunk => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const updates = JSON.parse(body);
+              const affectedContainers = this.containerManager.updateConfig(provider, updates);
+
+              // Optionally restart affected containers
+              let restartedContainers = [];
+              if (updates.restart !== false && affectedContainers.length > 0) {
+                console.log(`[Gateway] Restarting ${affectedContainers.length} ${provider} containers for config update`);
+
+                for (const containerId of affectedContainers) {
+                  const containerInfo = this.containerManager.get(containerId);
+                  if (containerInfo) {
+                    try {
+                      // Stop and respawn
+                      await this.containerManager.stop(containerId);
+                      const newContainer = await this.containerManager.spawn(provider, {
+                        model: containerInfo.model,
+                      });
+                      restartedContainers.push(newContainer.id);
+                    } catch (err) {
+                      console.error(`[Gateway] Failed to restart ${containerId}:`, err.message);
+                    }
+                  }
+                }
+              }
+
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                success: true,
+                provider,
+                affectedContainers,
+                restartedContainers,
+              }));
+            } catch (err) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          });
+          return;
+        }
+      }
+
+      // Static file server for workspace files
+      // Serves files from the shared workspace at /serve/filename
+      if (url.pathname.startsWith('/serve/')) {
+        const filePath = url.pathname.slice(7); // Remove '/serve/'
+        const workspaceBase = this.containerManager.workspaceBase;
+        const fullPath = path.join(workspaceBase, 'shared', 'workspace', filePath);
+
+        // Security: prevent path traversal
+        const resolvedPath = path.resolve(fullPath);
+        const allowedBase = path.resolve(path.join(workspaceBase, 'shared', 'workspace'));
+        if (!resolvedPath.startsWith(allowedBase)) {
+          res.writeHead(403, { 'Content-Type': 'text/plain' });
+          res.end('Forbidden');
+          return;
+        }
+
+        try {
+          const content = fs.readFileSync(resolvedPath);
+          const ext = path.extname(filePath).toLowerCase();
+          const mimeTypes = {
+            '.html': 'text/html',
+            '.css': 'text/css',
+            '.js': 'application/javascript',
+            '.json': 'application/json',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.svg': 'image/svg+xml',
+            '.ico': 'image/x-icon',
+            '.txt': 'text/plain',
+          };
+          const contentType = mimeTypes[ext] || 'application/octet-stream';
+          res.writeHead(200, { 'Content-Type': contentType });
+          res.end(content);
+        } catch (err) {
+          if (err.code === 'ENOENT') {
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('File not found');
+          } else {
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            res.end('Server error');
+          }
+        }
         return;
       }
 
@@ -1019,7 +1202,15 @@ export class Gateway {
         name: 'Zeus AI Gateway',
         version: '1.0.0',
         websocket: `ws://localhost:${this.port}`,
-        endpoints: ['/health', '/status', '/providers', '/processes'],
+        endpoints: [
+          '/health',
+          '/status',
+          '/providers',
+          '/processes',
+          '/logs/:containerId',
+          '/config/:provider (GET/POST)',
+          '/serve/:filepath',
+        ],
       }));
     });
 
@@ -1035,8 +1226,11 @@ export class Gateway {
     console.log('╚════════════════════════════════════════╝');
     console.log('');
 
+    // Clean up any orphaned containers from previous runs
+    await this.containerManager.cleanupOrphanedContainers();
+
     // Start health checks
-    this.processManager.startHealthChecks();
+    this.containerManager.startHealthChecks();
 
     // Start servers
     this.setupHttpServer();
@@ -1052,8 +1246,8 @@ export class Gateway {
       console.log(`  Session:   ${this.sessionId.slice(0, 8)}...`);
       console.log('');
 
-      const status = this.processManager.getStatus();
-      console.log(`Processes: ${status.total} (healthy: ${status.byHealth.healthy})`);
+      const status = this.containerManager.getStatus();
+      console.log(`Containers: ${status.total} (healthy: ${status.byHealth.healthy})`);
       for (const [provider, info] of Object.entries(status.byProvider)) {
         console.log(`  - ${provider}: ${info.healthy}/${info.total} healthy`);
       }
@@ -1063,27 +1257,43 @@ export class Gateway {
       console.log('Waiting for connections... (Ctrl+C to stop)');
       console.log('');
     });
+  }
 
-    // Graceful shutdown
-    const shutdown = async () => {
-      console.log('\n[Shutdown] Stopping gateway...');
+  /**
+   * Stop the gateway and cleanup all resources
+   */
+  async stop() {
+    console.log('[Gateway] Stopping gateway...');
 
-      // Close daemon connections
-      for (const ws of this.daemonConnections.values()) {
+    // Close all client connections
+    for (const client of this.clients.values()) {
+      if (client.ws && client.ws.readyState === WebSocket.OPEN) {
+        client.ws.close(1000, 'Gateway shutting down');
+      }
+    }
+
+    // Close daemon connections
+    for (const ws of this.daemonConnections.values()) {
+      if (ws.readyState === WebSocket.OPEN) {
         ws.close();
       }
+    }
 
-      // Stop health checks and all processes
-      await this.processManager.cleanup();
+    // Stop health checks and all containers
+    await this.containerManager.cleanup();
 
+    // Close WebSocket server
+    if (this.wss) {
       this.wss.close();
-      this.httpServer.close(() => {
-        console.log('[Shutdown] Goodbye!');
-        process.exit(0);
-      });
-    };
+    }
 
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
+    // Close HTTP server
+    if (this.httpServer) {
+      await new Promise((resolve) => {
+        this.httpServer.close(resolve);
+      });
+    }
+
+    console.log('[Gateway] Goodbye!');
   }
 }

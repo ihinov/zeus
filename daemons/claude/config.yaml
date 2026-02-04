@@ -1,0 +1,35 @@
+# Zeus Daemon: Claude
+name: Claude Assistant
+description: General-purpose Claude Code assistant
+provider: claude
+icon: C
+
+# Model configuration
+model: sonnet
+models:
+  - id: sonnet
+    name: Claude Sonnet
+    description: Fast and capable
+  - id: opus
+    name: Claude Opus
+    description: Most powerful
+  - id: haiku
+    name: Claude Haiku
+    description: Fastest responses
+
+# System prompt file (relative to this config)
+systemPromptFile: system-prompt.txt
+
+# Tools
+tools:
+  allowed: default
+
+# Permissions
+permissions:
+  mode: default
+  dangerouslySkipPermissions: false
+
+# Session
+session:
+  persistence: true
+  verbose: false

@@ -3,9 +3,21 @@
  *
  * Provides WebSocket/HTTP server, message routing, and lifecycle management.
  * Subclasses implement the AI-specific logic.
+ *
+ * Workspace (containers or local):
+ * - Container: /workspace (set via WORKSPACE env)
+ * - Local: ~/.zeus/workspace
+ *
+ * System prompts are file-based in workspace/prompts/:
+ * - system-prompt.txt: Full system prompt
+ * - append-prompt.txt: Appended to default prompt
+ * - Passed to CLI via --system-prompt-file flag
  */
 
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import { WebSocketServer } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -105,37 +117,125 @@ export class BaseDaemon {
     return this.sessionId;
   }
 
-  // ============ SYSTEM PROMPT CONFIGURATION ============
+  // ============ WORKSPACE CONFIGURATION ============
 
   /**
-   * Set system prompt (replaces existing)
+   * Get the workspace directory path
+   * In containers: /workspace, locally: ~/.zeus/workspace
+   * @returns {string} Path to workspace directory
+   */
+  getWorkspaceDir() {
+    const workspace = process.env.WORKSPACE || path.join(os.homedir(), '.zeus', 'workspace');
+    if (!fs.existsSync(workspace)) {
+      fs.mkdirSync(workspace, { recursive: true });
+    }
+    return workspace;
+  }
+
+  /**
+   * Get the prompts directory path within workspace
+   * @returns {string} Path to prompts directory
+   */
+  getPromptsDir() {
+    const promptsDir = path.join(this.getWorkspaceDir(), 'prompts');
+    if (!fs.existsSync(promptsDir)) {
+      fs.mkdirSync(promptsDir, { recursive: true });
+    }
+    return promptsDir;
+  }
+
+  /**
+   * Get the system prompt file path for this daemon
+   * Simplified path since each container is isolated
+   * @returns {string} Path to system prompt file
+   */
+  getSystemPromptFilePath() {
+    return path.join(this.getPromptsDir(), 'system-prompt.txt');
+  }
+
+  /**
+   * Get the append system prompt file path for this daemon
+   * @returns {string} Path to append system prompt file
+   */
+  getAppendSystemPromptFilePath() {
+    return path.join(this.getPromptsDir(), 'append-prompt.txt');
+  }
+
+  /**
+   * Set system prompt (saves to file)
    * @param {string} prompt - System prompt text
    */
   setSystemPrompt(prompt) {
-    this.systemPrompt = prompt;
-    this.appendSystemPrompt = null; // Clear append when setting full prompt
-    console.log(`[Config] System prompt set (${prompt?.length || 0} chars)`);
+    const filePath = this.getSystemPromptFilePath();
+    const appendPath = this.getAppendSystemPromptFilePath();
+
+    if (prompt && prompt.trim()) {
+      fs.writeFileSync(filePath, prompt, 'utf-8');
+      this.systemPrompt = filePath; // Store path, not content
+      // Clear append prompt file when setting full prompt
+      if (fs.existsSync(appendPath)) {
+        fs.unlinkSync(appendPath);
+      }
+      this.appendSystemPrompt = null;
+      console.log(`[Config] System prompt saved to: ${filePath} (${prompt.length} chars)`);
+    } else {
+      // Empty prompt - clear the file
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      this.systemPrompt = null;
+      console.log(`[Config] System prompt cleared`);
+    }
   }
 
   /**
-   * Set append system prompt (adds to default)
+   * Set append system prompt (saves to file)
    * @param {string} prompt - Text to append to system prompt
    */
   setAppendSystemPrompt(prompt) {
-    this.appendSystemPrompt = prompt;
-    this.systemPrompt = null; // Clear full prompt when setting append
-    console.log(`[Config] Append system prompt set (${prompt?.length || 0} chars)`);
+    const filePath = this.getSystemPromptFilePath();
+    const appendPath = this.getAppendSystemPromptFilePath();
+
+    if (prompt && prompt.trim()) {
+      fs.writeFileSync(appendPath, prompt, 'utf-8');
+      this.appendSystemPrompt = appendPath; // Store path, not content
+      // Clear full prompt file when setting append
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      this.systemPrompt = null;
+      console.log(`[Config] Append system prompt saved to: ${appendPath} (${prompt.length} chars)`);
+    } else {
+      // Empty prompt - clear the file
+      if (fs.existsSync(appendPath)) {
+        fs.unlinkSync(appendPath);
+      }
+      this.appendSystemPrompt = null;
+      console.log(`[Config] Append system prompt cleared`);
+    }
   }
 
   /**
-   * Get current system prompt configuration
-   * @returns {object} System prompt config
+   * Get current system prompt configuration (reads from files)
+   * @returns {object} System prompt config with file paths and content
    */
   getSystemPromptConfig() {
-    return {
-      systemPrompt: this.systemPrompt,
-      appendSystemPrompt: this.appendSystemPrompt,
+    const config = {
+      systemPromptFile: this.systemPrompt,
+      appendSystemPromptFile: this.appendSystemPrompt,
+      systemPrompt: null,
+      appendSystemPrompt: null,
     };
+
+    // Read content from files if they exist
+    if (this.systemPrompt && fs.existsSync(this.systemPrompt)) {
+      config.systemPrompt = fs.readFileSync(this.systemPrompt, 'utf-8');
+    }
+    if (this.appendSystemPrompt && fs.existsSync(this.appendSystemPrompt)) {
+      config.appendSystemPrompt = fs.readFileSync(this.appendSystemPrompt, 'utf-8');
+    }
+
+    return config;
   }
 
   // ============ TOOLS CONFIGURATION ============
@@ -164,6 +264,7 @@ export class BaseDaemon {
    * @returns {object} Full agent state
    */
   getAgentState() {
+    const promptConfig = this.getSystemPromptConfig();
     return {
       name: this.name,
       sessionId: this.sessionId,
@@ -172,8 +273,10 @@ export class BaseDaemon {
       isProcessing: this.isProcessing,
       isReady: this.isReady,
       isAuthenticated: this.isAuthenticated,
-      systemPrompt: this.systemPrompt,
-      appendSystemPrompt: this.appendSystemPrompt,
+      systemPromptFile: this.systemPrompt,       // File path
+      appendSystemPromptFile: this.appendSystemPrompt, // File path
+      systemPrompt: promptConfig.systemPrompt,   // File content
+      appendSystemPrompt: promptConfig.appendSystemPrompt, // File content
       allowedTools: this.allowedTools,
       uptime: process.uptime(),
       ...this.getExtraStatus(),

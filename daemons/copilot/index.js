@@ -6,7 +6,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { BaseDaemon } from './BaseDaemon.js';
+import { BaseDaemon } from '../lib/BaseDaemon.js';
 
 const COPILOT_CMD = process.env.COPILOT_CMD || 'copilot';
 
@@ -228,4 +228,16 @@ export class CopilotDaemon extends BaseDaemon {
       this.isProcessing = false;
     }
   }
+}
+
+// ============ ENTRY POINT ============
+
+// Run directly: node copilot/index.js [port]
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const port = parseInt(process.argv[2]) || parseInt(process.env.PORT) || 3458;
+  const daemon = new CopilotDaemon({ port });
+  daemon.start().catch((err) => {
+    console.error('Fatal error:', err.message);
+    process.exit(1);
+  });
 }

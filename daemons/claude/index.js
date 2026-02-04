@@ -6,7 +6,8 @@
  */
 
 import { spawn } from 'node:child_process';
-import { BaseDaemon } from './BaseDaemon.js';
+import fs from 'node:fs';
+import { BaseDaemon } from '../lib/BaseDaemon.js';
 
 const CLAUDE_CMD = process.env.CLAUDE_CMD || 'claude';
 
@@ -35,8 +36,10 @@ export class ClaudeDaemon extends BaseDaemon {
     this.claudeVersion = '';
     this.currentProcess = null;
 
-    // Session management - use provided session ID or generate one
-    this.sessionId = options.sessionId || crypto.randomUUID();
+    // Session management - use provided session ID or use a deterministic one
+    // Using a deterministic UUID allows sessions to persist across daemon restarts
+    // Default UUID is a fixed value for Zeus Claude daemon
+    this.sessionId = options.sessionId || process.env.CLAUDE_SESSION_ID || '00000000-0000-4000-8000-000000000001';
     this.sessionInitialized = false; // Track if first message has been sent
   }
 
@@ -105,6 +108,9 @@ export class ClaudeDaemon extends BaseDaemon {
     console.log(`[Chat] Session: ${this.sessionId}`);
 
     return new Promise((resolve, reject) => {
+      // Set working directory - default to /workspace (user sandbox)
+      const workingDir = options.cwd || process.env.WORKSPACE || '/workspace';
+
       const args = [
         '-p', message,
         '--output-format', 'stream-json',
@@ -112,11 +118,25 @@ export class ClaudeDaemon extends BaseDaemon {
         '--verbose',
       ];
 
-      // First message creates session, subsequent messages resume it
-      if (!this.sessionInitialized) {
-        args.push('--session-id', this.sessionId);
-      } else {
+      // Use --resume if session is initialized (we know it exists)
+      // Otherwise use --session-id which creates a new session with that ID
+      // After first successful message, sessionInitialized becomes true
+      if (this.sessionInitialized) {
         args.push('--resume', this.sessionId);
+      } else {
+        // For persistent sessions, check if the session already exists
+        // Session files are stored based on the working directory path
+        // e.g., /workspace becomes -workspace, /app becomes -app
+        const encodedPath = workingDir.replace(/\//g, '-');
+        const sessionFile = `/home/zeus/.claude/projects/${encodedPath}/${this.sessionId}.jsonl`;
+        const sessionExists = fs.existsSync(sessionFile);
+
+        if (sessionExists) {
+          args.push('--resume', this.sessionId);
+          this.sessionInitialized = true; // Mark as initialized since session exists
+        } else {
+          args.push('--session-id', this.sessionId);
+        }
       }
 
       // Skip permissions for daemon operation
@@ -130,18 +150,38 @@ export class ClaudeDaemon extends BaseDaemon {
         args.push('--allowedTools', ...toolsToUse);
       }
 
-      // Add working directory
-      if (options.cwd) {
-        args.push('--add-dir', options.cwd);
+      // Add working directory and public directory for web serving
+      args.push('--add-dir', workingDir);
+
+      // Add public directory for web serving if it exists
+      const publicDir = process.env.PUBLIC_DIR || '/app/public';
+      args.push('--add-dir', publicDir);
+
+      // System prompt customization via file
+      // Priority: 1) Dynamic config from gateway, 2) Options, 3) Instance config, 4) Default
+      const promptsDir = process.env.PROMPTS_DIR || '/config/prompts';
+      const dynamicPromptFile = `${promptsDir}/claude-system-prompt.txt`;
+      const defaultPromptFile = '/app/claude/system-prompt.txt';
+
+      let sysPromptFile = null;
+      if (fs.existsSync(dynamicPromptFile)) {
+        // Use dynamic prompt from gateway config
+        sysPromptFile = dynamicPromptFile;
+        console.log('[Chat] Using dynamic system prompt from gateway config');
+      } else if (options.systemPromptFile) {
+        sysPromptFile = options.systemPromptFile;
+      } else if (this.systemPrompt) {
+        sysPromptFile = this.systemPrompt;
+      } else if (fs.existsSync(defaultPromptFile)) {
+        // Fall back to baked-in default
+        sysPromptFile = defaultPromptFile;
       }
 
-      // System prompt customization (from options or instance config)
-      const sysPrompt = options.systemPrompt || this.systemPrompt;
-      const appendSysPrompt = options.appendSystemPrompt || this.appendSystemPrompt;
-      if (sysPrompt) {
-        args.push('--system-prompt', sysPrompt);
-      } else if (appendSysPrompt) {
-        args.push('--append-system-prompt', appendSysPrompt);
+      const appendSysPromptFile = options.appendSystemPromptFile || this.appendSystemPrompt;
+      if (sysPromptFile) {
+        args.push('--system-prompt-file', sysPromptFile);
+      } else if (appendSysPromptFile) {
+        args.push('--append-system-prompt-file', appendSysPromptFile);
       }
 
       if (process.env.DEBUG === 'true') {
@@ -150,7 +190,7 @@ export class ClaudeDaemon extends BaseDaemon {
 
       this.currentProcess = spawn(CLAUDE_CMD, args, {
         env: { ...process.env },
-        cwd: options.cwd || process.cwd(),
+        cwd: workingDir,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 
@@ -268,6 +308,28 @@ export class ClaudeDaemon extends BaseDaemon {
             if (block.type === 'text' && block.text) {
               appendText(block.text);
               sendEvent('content_delta', { text: block.text });
+            } else if (block.type === 'tool_use') {
+              // Tool call - send to UI
+              sendEvent('tool_call', {
+                id: block.id,
+                name: block.name,
+                input: block.input,
+              });
+            }
+          }
+        }
+        break;
+
+      case 'user':
+        // Tool result from previous tool call
+        if (event.message?.content) {
+          for (const block of event.message.content) {
+            if (block.type === 'tool_result') {
+              sendEvent('tool_result', {
+                id: block.tool_use_id,
+                result: block.content,
+                isError: block.is_error || false,
+              });
             }
           }
         }
@@ -309,11 +371,8 @@ export class ClaudeDaemon extends BaseDaemon {
         break;
 
       case 'result':
-        // Final result
-        if (event.result) {
-          appendText(event.result);
-          sendEvent('content', { text: event.result });
-        }
+        // Final result - text already accumulated from assistant event
+        // Don't append again to avoid duplication
         break;
 
       default:
@@ -379,4 +438,16 @@ export class ClaudeDaemon extends BaseDaemon {
       this.isProcessing = false;
     }
   }
+}
+
+// ============ ENTRY POINT ============
+
+// Run directly: node claude/index.js [port]
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const port = parseInt(process.argv[2]) || parseInt(process.env.PORT) || 3457;
+  const daemon = new ClaudeDaemon({ port });
+  daemon.start().catch((err) => {
+    console.error('Fatal error:', err.message);
+    process.exit(1);
+  });
 }
