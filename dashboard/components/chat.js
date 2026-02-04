@@ -503,6 +503,41 @@ class ChatComponent {
     if (thinkingPanel) thinkingPanel.classList.add('collapsed');
 
     messageEl.querySelectorAll('.tool-call').forEach(tc => tc.classList.add('collapsed'));
+
+    // Add copy button for assistant messages
+    if (messageEl.classList.contains('assistant')) {
+      const bodyEl = messageEl.querySelector('.message-body');
+      if (bodyEl && !bodyEl.querySelector('.message-copy-btn')) {
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'message-copy-btn';
+        copyBtn.innerHTML = 'Copy';
+        copyBtn.title = 'Copy message';
+        copyBtn.addEventListener('click', () => this.copyMessage(messageId));
+        bodyEl.appendChild(copyBtn);
+      }
+    }
+  }
+
+  copyMessage(messageId) {
+    const msg = this.messages.find(m => m.id === messageId);
+    if (!msg) return;
+
+    navigator.clipboard.writeText(msg.content).then(() => {
+      // Show feedback
+      const messageEl = document.getElementById(messageId);
+      const copyBtn = messageEl?.querySelector('.message-copy-btn');
+      if (copyBtn) {
+        const originalText = copyBtn.innerHTML;
+        copyBtn.innerHTML = 'Copied!';
+        copyBtn.classList.add('copied');
+        setTimeout(() => {
+          copyBtn.innerHTML = originalText;
+          copyBtn.classList.remove('copied');
+        }, 2000);
+      }
+    }).catch(err => {
+      console.error('Failed to copy:', err);
+    });
   }
 
   showThinkingIndicator(messageId) {

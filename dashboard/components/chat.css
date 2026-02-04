@@ -56,6 +56,37 @@
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  position: relative;
+}
+
+.message-copy-btn {
+  align-self: flex-start;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  opacity: 0;
+}
+
+.chat-message.assistant:hover .message-copy-btn {
+  opacity: 1;
+}
+
+.message-copy-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border-color: var(--text-muted);
+}
+
+.message-copy-btn.copied {
+  background: var(--accent-green);
+  color: var(--bg-primary);
+  border-color: var(--accent-green);
+  opacity: 1;
 }
 
 .message-content {

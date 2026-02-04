@@ -326,6 +326,7 @@ ipcMain.handle('load-daemon-configs', async () => {
 
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:3001';
 const GATEWAY_WS_URL = process.env.GATEWAY_WS_URL || 'ws://localhost:3001';
+const GATEWAY_HTTP_URL = process.env.GATEWAY_HTTP_URL || 'http://localhost:3001';
 
 // IPC: Check if gateway is running
 ipcMain.handle('check-gateway', async () => {
@@ -454,31 +455,51 @@ function forceStopContainers() {
   }
 }
 
-// Full cleanup
-async function cleanup() {
+// Send shutdown progress to renderer
+function sendShutdownProgress(step, message) {
+  console.log(`[App] ${message}`);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('shutdown-progress', { step, message });
+  }
+}
+
+// Full cleanup with progress reporting
+async function cleanup(withProgress = false) {
   if (isQuitting) return;
   isQuitting = true;
+
+  if (withProgress) {
+    sendShutdownProgress(1, 'Shutting down...');
+  }
 
   console.log('[App] Cleaning up...');
 
   // First try graceful shutdown via gateway
+  if (withProgress) sendShutdownProgress(2, 'Stopping daemons...');
   await stopAllDaemons();
 
   // Force stop any remaining containers
+  if (withProgress) sendShutdownProgress(3, 'Stopping containers...');
   forceStopContainers();
 
   // Stop gateway process
   if (gatewayProcess && !gatewayProcess.killed) {
+    if (withProgress) sendShutdownProgress(4, 'Stopping gateway...');
     console.log('[App] Stopping gateway...');
     gatewayProcess.kill('SIGTERM');
 
     // Give it a moment, then force kill
-    setTimeout(() => {
-      if (gatewayProcess && !gatewayProcess.killed) {
-        gatewayProcess.kill('SIGKILL');
-      }
-    }, 2000);
+    await new Promise(resolve => {
+      setTimeout(() => {
+        if (gatewayProcess && !gatewayProcess.killed) {
+          gatewayProcess.kill('SIGKILL');
+        }
+        resolve();
+      }, 1000);
+    });
   }
+
+  if (withProgress) sendShutdownProgress(5, 'Cleanup complete');
 }
 
 // Cleanup on app quit
@@ -559,6 +580,41 @@ ipcMain.handle('update-daemon-config', async (event, config) => {
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 
   return { success: true, path: configPath };
+});
+
+// IPC: Update Gateway config (system prompt) and restart daemon
+ipcMain.handle('update-gateway-config', async (event, { provider, systemPrompt, restart = true }) => {
+  try {
+    const response = await fetch(`${GATEWAY_HTTP_URL}/config/${provider}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ systemPrompt, restart }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update config');
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.error('[IPC] Failed to update gateway config:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+// IPC: Get Gateway config (current system prompt)
+ipcMain.handle('get-gateway-config', async (event, provider) => {
+  try {
+    const response = await fetch(`${GATEWAY_HTTP_URL}/config/${provider}`);
+    if (!response.ok) {
+      throw new Error('Failed to get config');
+    }
+    return await response.json();
+  } catch (err) {
+    console.error('[IPC] Failed to get gateway config:', err);
+    return { provider, systemPrompt: null, error: err.message };
+  }
 });
 
 // IPC: Delete daemon config
@@ -658,8 +714,24 @@ ipcMain.on('window-maximize', () => {
   }
 });
 
-ipcMain.on('window-close', () => {
-  mainWindow?.close();
+ipcMain.on('window-close', async () => {
+  // Don't immediately close - show shutdown screen and cleanup first
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('show-shutdown-screen');
+  }
+
+  // Perform cleanup with progress
+  await cleanup(true);
+
+  // Now actually quit
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('shutdown-complete');
+  }
+
+  // Small delay to show completion, then quit
+  setTimeout(() => {
+    app.quit();
+  }, 500);
 });
 
 app.whenReady().then(async () => {

@@ -649,11 +649,17 @@
       background: var(--bg-secondary);
       border: 1px solid var(--border);
       border-radius: 16px;
-      width: 500px;
-      max-height: 80vh;
+      width: 560px;
+      min-width: 400px;
+      max-width: 90vw;
+      height: 70vh;
+      min-height: 400px;
+      max-height: 90vh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      resize: both;
+      position: relative;
     }
 
     .settings-header {
@@ -682,6 +688,19 @@
       flex: 1;
       padding: 24px;
       overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .settings-body .wizard-input-group:last-child {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .settings-body .wizard-input-group:last-child .wizard-textarea {
+      flex: 1;
+      min-height: 150px;
     }
 
     .settings-footer {
@@ -694,6 +713,23 @@
 
     .settings-danger {
       color: var(--accent-red);
+    }
+
+    .settings-panel::after {
+      content: '';
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      width: 12px;
+      height: 12px;
+      border-right: 2px solid var(--text-muted);
+      border-bottom: 2px solid var(--text-muted);
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .settings-panel:hover::after {
+      opacity: 0.8;
     }
 
     .avatar-section {
@@ -926,6 +962,14 @@
       resize: vertical;
     }
 
+    .wizard-hint {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+
     /* Wizard Footer */
     .wizard-footer {
       padding: 16px 24px;
@@ -996,6 +1040,112 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+
+    /* ============ SHUTDOWN SCREEN ============ */
+    .shutdown-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 3000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s, visibility 0.3s;
+    }
+
+    .shutdown-screen.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .shutdown-logo {
+      font-size: 64px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 24px;
+      width: 100px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-secondary);
+      border: 2px solid var(--border);
+      border-radius: 20px;
+    }
+
+    .shutdown-title {
+      font-size: 24px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .shutdown-text {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+
+    .shutdown-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 300px;
+    }
+
+    .shutdown-step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .shutdown-step-icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 12px;
+    }
+
+    .shutdown-step.pending .shutdown-step-icon {
+      border: 2px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .shutdown-step.active .shutdown-step-icon {
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    .shutdown-step.success .shutdown-step-icon {
+      background: var(--accent-green);
+      color: var(--bg-primary);
+    }
+
+    .shutdown-step.success {
+      color: var(--text-primary);
+    }
+
+    .shutdown-complete {
+      margin-top: 24px;
+      font-size: 18px;
+      color: var(--accent-green);
+      display: none;
+    }
+
+    .shutdown-screen.complete .shutdown-complete {
+      display: block;
+    }
   </style>
   <link rel="stylesheet" href="components/chat.css">
   <script src="components/chat.js"></script>
@@ -1033,6 +1183,38 @@
       <button class="wizard-btn wizard-btn-secondary" id="btn-clear-containers">Clear All Containers</button>
       <button class="wizard-btn wizard-btn-primary" id="btn-retry-startup">Retry</button>
     </div>
+  </div>
+
+  <!-- Shutdown Screen -->
+  <div class="shutdown-screen" id="shutdown-screen">
+    <div class="shutdown-logo">Z</div>
+    <div class="shutdown-title">Shutting Down</div>
+    <div class="shutdown-text" id="shutdown-text">Please wait...</div>
+
+    <div class="shutdown-steps">
+      <div class="shutdown-step pending" id="shutdown-step-1">
+        <div class="shutdown-step-icon">1</div>
+        <span>Preparing shutdown...</span>
+      </div>
+      <div class="shutdown-step pending" id="shutdown-step-2">
+        <div class="shutdown-step-icon">2</div>
+        <span>Stopping daemons...</span>
+      </div>
+      <div class="shutdown-step pending" id="shutdown-step-3">
+        <div class="shutdown-step-icon">3</div>
+        <span>Stopping containers...</span>
+      </div>
+      <div class="shutdown-step pending" id="shutdown-step-4">
+        <div class="shutdown-step-icon">4</div>
+        <span>Stopping gateway...</span>
+      </div>
+      <div class="shutdown-step pending" id="shutdown-step-5">
+        <div class="shutdown-step-icon">5</div>
+        <span>Cleanup complete</span>
+      </div>
+    </div>
+
+    <div class="shutdown-complete">Goodbye!</div>
   </div>
 
   <!-- Titlebar -->
@@ -1106,13 +1288,14 @@
     <div class="settings-panel">
       <div class="settings-header">
         <span class="settings-title">Daemon Settings</span>
-        <button class="settings-close" id="settings-close">x</button>
+        <button class="settings-close" id="settings-close">×</button>
       </div>
 
       <div class="settings-body">
         <div class="wizard-input-group">
           <label class="wizard-label">Name</label>
           <input type="text" class="wizard-input" id="settings-name" placeholder="Daemon name">
+          <span class="wizard-hint">Display name for this daemon</span>
         </div>
 
         <div class="wizard-input-group">
@@ -1120,9 +1303,10 @@
           <select class="wizard-input" id="settings-model">
             <!-- Populated dynamically -->
           </select>
+          <span class="wizard-hint">AI model to use for responses</span>
         </div>
 
-        <div class="wizard-input-group">
+        <div class="wizard-input-group" style="display: none;">
           <label class="wizard-label">Prompt Template</label>
           <select class="wizard-input" id="settings-template">
             <!-- Populated dynamically -->
@@ -1131,7 +1315,8 @@
 
         <div class="wizard-input-group">
           <label class="wizard-label">System Prompt</label>
-          <textarea class="wizard-input wizard-textarea" id="settings-prompt" rows="8" placeholder="System prompt..."></textarea>
+          <textarea class="wizard-input wizard-textarea" id="settings-prompt" rows="12" placeholder="Enter custom instructions for the AI..."></textarea>
+          <span class="wizard-hint">Custom instructions that define the daemon's behavior and personality. Changes require a restart.</span>
         </div>
       </div>
 
@@ -1272,6 +1457,70 @@
 
     ipcRenderer.on('window-maximized', (event, isMaximized) => {
       // Could update button icon here if needed
+    });
+
+    // ============ SHUTDOWN HANDLING ============
+    const shutdownScreen = document.getElementById('shutdown-screen');
+    const shutdownText = document.getElementById('shutdown-text');
+
+    function showShutdownScreen() {
+      shutdownScreen.classList.add('active');
+      // Reset all steps to pending
+      for (let i = 1; i <= 5; i++) {
+        const step = document.getElementById(`shutdown-step-${i}`);
+        if (step) {
+          step.className = 'shutdown-step pending';
+          step.querySelector('.shutdown-step-icon').textContent = i.toString();
+        }
+      }
+    }
+
+    function updateShutdownStep(stepNum, status, text) {
+      const step = document.getElementById(`shutdown-step-${stepNum}`);
+      if (!step) return;
+
+      // Mark previous steps as success
+      for (let i = 1; i < stepNum; i++) {
+        const prevStep = document.getElementById(`shutdown-step-${i}`);
+        if (prevStep && !prevStep.classList.contains('success')) {
+          prevStep.className = 'shutdown-step success';
+          prevStep.querySelector('.shutdown-step-icon').textContent = '✓';
+        }
+      }
+
+      step.className = `shutdown-step ${status}`;
+      if (status === 'active') {
+        step.querySelector('.shutdown-step-icon').textContent = '●';
+      } else if (status === 'success') {
+        step.querySelector('.shutdown-step-icon').textContent = '✓';
+      }
+
+      if (text) {
+        step.querySelector('span').textContent = text;
+      }
+
+      // Update main text
+      if (shutdownText) {
+        shutdownText.textContent = text || 'Please wait...';
+      }
+    }
+
+    ipcRenderer.on('show-shutdown-screen', () => {
+      showShutdownScreen();
+    });
+
+    ipcRenderer.on('shutdown-progress', (event, { step, message }) => {
+      console.log(`[Shutdown] Step ${step}: ${message}`);
+      updateShutdownStep(step, 'active', message);
+    });
+
+    ipcRenderer.on('shutdown-complete', () => {
+      // Mark all steps as success
+      for (let i = 1; i <= 5; i++) {
+        updateShutdownStep(i, 'success');
+      }
+      shutdownScreen.classList.add('complete');
+      if (shutdownText) shutdownText.textContent = 'Shutdown complete';
     });
 
     // ============ WIZARD STATE ============
@@ -1833,6 +2082,16 @@
           if (healthyDaemons.length > 0) {
             setStepStatus('daemon', 'success', 'Daemon connected');
             hideLoadingScreen();
+            // Set currentRunningDaemon and create a config from it
+            currentRunningDaemon = healthyDaemons[0];
+            const configs = await ipcRenderer.invoke('load-daemon-configs');
+            currentDaemonConfig = configs?.find(c => c.type === currentRunningDaemon.provider) || {
+              id: currentRunningDaemon.provider,
+              name: currentRunningDaemon.name || currentRunningDaemon.provider,
+              type: currentRunningDaemon.provider,
+              model: currentRunningDaemon.model,
+              systemPrompt: '',
+            };
             updateRunningDaemon(healthyDaemons[0]);
             return;
           } else {
@@ -1866,6 +2125,8 @@
             await new Promise(r => setTimeout(r, 1000));
             const daemons = await ipcRenderer.invoke('get-running-daemons');
             if (daemons && daemons.length > 0) {
+              currentRunningDaemon = daemons[0];
+              currentDaemonConfig = configs[0];
               updateRunningDaemon(daemons[0]);
             } else {
               currentDaemonConfig = configs[0];
@@ -2326,28 +2587,48 @@
     let currentDaemonConfig = null;
     let currentRunningDaemon = null;
 
-    function openSettings() {
+    async function openSettings() {
       if (!currentDaemonConfig) return;
 
-      // Populate fields
+      // Populate fields with local config first
       document.getElementById('settings-name').value = currentDaemonConfig.name || '';
       document.getElementById('settings-prompt').value = currentDaemonConfig.systemPrompt || '';
 
-      // Populate model options
+      // Try to get the active system prompt from Gateway (what's actually being used)
+      try {
+        const gatewayConfig = await ipcRenderer.invoke('get-gateway-config', currentDaemonConfig.type);
+        if (gatewayConfig.systemPrompt) {
+          document.getElementById('settings-prompt').value = gatewayConfig.systemPrompt;
+          // Also update local config to stay in sync
+          currentDaemonConfig.systemPrompt = gatewayConfig.systemPrompt;
+        }
+      } catch (err) {
+        console.log('Could not fetch gateway config, using local:', err);
+      }
+
+      // Populate model options - load from config.yaml
       const modelSelect = document.getElementById('settings-model');
-      const models = currentDaemonConfig.type === 'claude' ? [
-        { id: 'sonnet', name: 'Claude Sonnet' },
-        { id: 'opus', name: 'Claude Opus' },
-        { id: 'haiku', name: 'Claude Haiku' },
-        { id: 'claude-sonnet-4-5-20250514', name: 'Sonnet 4.5' },
-        { id: 'claude-opus-4-5-20250514', name: 'Opus 4.5' },
-      ] : currentDaemonConfig.type === 'gemini' ? [
-        { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-        { id: 'gemini-2.0-pro', name: 'Gemini 2.0 Pro' },
-      ] : [
-        { id: 'gpt-4o', name: 'GPT-4o' },
-        { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
-      ];
+      let models = [];
+      try {
+        models = await ipcRenderer.invoke('get-model-options', currentDaemonConfig.type);
+      } catch (err) {
+        console.error('Failed to load model options:', err);
+      }
+
+      // Fallback if no models loaded
+      if (!models || models.length === 0) {
+        models = currentDaemonConfig.type === 'claude' ? [
+          { id: 'sonnet', name: 'Claude Sonnet' },
+          { id: 'opus', name: 'Claude Opus' },
+          { id: 'haiku', name: 'Claude Haiku' },
+        ] : currentDaemonConfig.type === 'gemini' ? [
+          { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
+          { id: 'gemini-2.0-pro', name: 'Gemini 2.0 Pro' },
+        ] : [
+          { id: 'gpt-4o', name: 'GPT-4o' },
+          { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
+        ];
+      }
 
       modelSelect.innerHTML = models.map(m =>
         `<option value="${m.id}" ${m.id === currentDaemonConfig.model ? 'selected' : ''}>${m.name}</option>`
@@ -2380,10 +2661,11 @@
       }
 
       const modelChanged = newModel !== currentDaemonConfig.model;
-      const promptChanged = newPrompt !== currentDaemonConfig.systemPrompt;
+      const promptChanged = newPrompt !== (currentDaemonConfig.systemPrompt || '');
+      const nameChanged = newName !== currentDaemonConfig.name;
       const needsRestart = modelChanged || promptChanged;
 
-      // Update config
+      // Update local config
       const updatedConfig = {
         ...currentDaemonConfig,
         name: newName,
@@ -2397,33 +2679,50 @@
         <div class="content-placeholder">
           <div class="spinner" style="width: 48px; height: 48px;"></div>
           <h2 style="margin-top: 24px;">Updating daemon...</h2>
+          <p style="margin-top: 8px; color: var(--text-secondary);">
+            ${needsRestart ? 'Applying changes and restarting...' : 'Saving configuration...'}
+          </p>
         </div>
       `, true);
 
       try {
-        // Save config
+        // Save local config (for persistence across app restarts)
         await ipcRenderer.invoke('update-daemon-config', updatedConfig);
         currentDaemonConfig = updatedConfig;
 
+        // Update avatar name immediately
+        if (nameChanged) {
+          updateAvatar(newName, currentDaemonConfig.type.charAt(0).toUpperCase(), 'Updating...', newModel);
+        }
+
         if (needsRestart && currentRunningDaemon) {
-          // Stop current daemon
           updateStatus('Restarting...', 'thinking');
-          await ipcRenderer.invoke('stop-daemon', {
-            processId: currentRunningDaemon.id,
-            provider: currentDaemonConfig.type
-          });
 
-          // Wait a moment
-          await new Promise(r => setTimeout(r, 1000));
-
-          // Spawn with new config
-          await ipcRenderer.invoke('spawn-daemon', {
+          // Use Gateway config API to update system prompt and restart
+          // This writes to the shared prompts directory and restarts the container
+          const result = await ipcRenderer.invoke('update-gateway-config', {
             provider: currentDaemonConfig.type,
-            model: newModel,
+            systemPrompt: newPrompt,
+            restart: true,
           });
+
+          if (!result.success && result.error) {
+            console.error('Gateway config update failed:', result.error);
+            // Fall back to manual restart if gateway config fails
+            await ipcRenderer.invoke('stop-daemon', {
+              processId: currentRunningDaemon.id,
+              provider: currentDaemonConfig.type
+            });
+            await new Promise(r => setTimeout(r, 1000));
+            await ipcRenderer.invoke('spawn-daemon', {
+              provider: currentDaemonConfig.type,
+              model: newModel,
+            });
+          }
         }
 
         // Refresh state
+        await new Promise(r => setTimeout(r, 1500));
         checkGatewayAndDaemons();
       } catch (err) {
         console.error('Failed to save settings:', err);
@@ -2467,8 +2766,26 @@
     }
 
     // Settings event listeners
-    document.getElementById('avatar-section').addEventListener('click', () => {
-      if (currentDaemonConfig) openSettings();
+    document.getElementById('avatar-section').addEventListener('click', async () => {
+      console.log('[Settings] Avatar clicked, currentDaemonConfig:', currentDaemonConfig, 'currentRunningDaemon:', currentRunningDaemon);
+
+      // If we have a running daemon but no config, create one from the running daemon
+      if (!currentDaemonConfig && currentRunningDaemon) {
+        currentDaemonConfig = {
+          id: currentRunningDaemon.provider,
+          name: currentRunningDaemon.name || currentRunningDaemon.provider,
+          type: currentRunningDaemon.provider,
+          model: currentRunningDaemon.model,
+          systemPrompt: '',
+        };
+        console.log('[Settings] Created config from running daemon:', currentDaemonConfig);
+      }
+
+      if (currentDaemonConfig) {
+        openSettings();
+      } else {
+        console.log('[Settings] No daemon config or running daemon available');
+      }
     });
 
     document.getElementById('settings-close').addEventListener('click', closeSettings);
